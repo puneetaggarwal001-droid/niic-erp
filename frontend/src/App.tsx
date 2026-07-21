@@ -10,6 +10,7 @@ import EprPage from './pages/EprPage';
 import PayrollPage from './pages/PayrollPage';
 import LoginPage from './pages/LoginPage';
 import StorePage from './pages/store/StorePage';
+import SamplingPage from './pages/sampling/SamplingPage';
 import MastersPage from './pages/production/MastersPage';
 import JobsPage from './pages/production/JobsPage';
 import RoutingPage from './pages/production/RoutingPage';
@@ -63,6 +64,9 @@ function AppLayout({ children }: { children: ReactNode }) {
           </Link>
           <Link to="/store" style={{ color: '#fff' }}>
             Store
+          </Link>
+          <Link to="/sampling" style={{ color: '#fff' }}>
+            Sampling
           </Link>
           <Link to="/production/epr" style={{ color: '#fff' }}>
             EPR
@@ -211,6 +215,16 @@ export default function App() {
           <RequireAuth>
             <AppLayout>
               <StorePage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/sampling"
+        element={
+          <RequireAuth>
+            <AppLayout>
+              <SamplingPage />
             </AppLayout>
           </RequireAuth>
         }

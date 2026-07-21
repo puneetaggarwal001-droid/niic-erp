@@ -30,6 +30,10 @@ erp:
     password: ${ERP_ADMIN_PASSWORD:}
   cors:
     allowed-origins: ${ERP_CORS_ORIGINS:http://localhost:5173}
+  gatepass:
+    # Passes beyond this count in a calendar month are flagged with a penalty
+    # (legacy gatePassConfig.monthlyLimit, default 3).
+    monthly-limit: ${ERP_GATEPASS_MONTHLY_LIMIT:3}
 
 ---
 spring:

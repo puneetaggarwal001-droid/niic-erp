@@ -3,7 +3,11 @@ import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import { RequireAuth } from './components/RequireAuth';
 import { useAuth } from './context/AuthContext';
 import AttendancePage from './pages/AttendancePage';
+import GatePassPage from './pages/GatePassPage';
 import EmployeesPage from './pages/EmployeesPage';
+import UsersPage from './pages/UsersPage';
+import EprPage from './pages/EprPage';
+import PayrollPage from './pages/PayrollPage';
 import LoginPage from './pages/LoginPage';
 import MastersPage from './pages/production/MastersPage';
 import JobsPage from './pages/production/JobsPage';
@@ -15,6 +19,7 @@ import TransferChallansPage from './pages/production/TransferChallansPage';
 
 function AppLayout({ children }: { children: ReactNode }) {
   const { auth, logout } = useAuth();
+  const isAdmin = auth?.role === 'ADMIN';
   return (
     <div style={{ fontFamily: 'sans-serif' }}>
       <header
@@ -34,6 +39,9 @@ function AppLayout({ children }: { children: ReactNode }) {
           <Link to="/attendance" style={{ color: '#fff' }}>
             Attendance
           </Link>
+          <Link to="/gate-passes" style={{ color: '#fff' }}>
+            Gate Pass
+          </Link>
           <Link to="/production/jobs" style={{ color: '#fff' }}>
             Jobs
           </Link>
@@ -52,9 +60,22 @@ function AppLayout({ children }: { children: ReactNode }) {
           <Link to="/production/transfers" style={{ color: '#fff' }}>
             Transfers
           </Link>
+          <Link to="/production/epr" style={{ color: '#fff' }}>
+            EPR
+          </Link>
           <Link to="/production/masters" style={{ color: '#fff' }}>
             Masters
           </Link>
+          {isAdmin && (
+            <Link to="/payroll" style={{ color: '#fff' }}>
+              Payroll
+            </Link>
+          )}
+          {isAdmin && (
+            <Link to="/users" style={{ color: '#fff' }}>
+              Users
+            </Link>
+          )}
         </nav>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           {auth && <span>{auth.username}</span>}
@@ -86,6 +107,16 @@ export default function App() {
           <RequireAuth>
             <AppLayout>
               <AttendancePage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/gate-passes"
+        element={
+          <RequireAuth>
+            <AppLayout>
+              <GatePassPage />
             </AppLayout>
           </RequireAuth>
         }
@@ -156,6 +187,36 @@ export default function App() {
           <RequireAuth>
             <AppLayout>
               <TransferChallansPage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/production/epr"
+        element={
+          <RequireAuth>
+            <AppLayout>
+              <EprPage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/payroll"
+        element={
+          <RequireAuth>
+            <AppLayout>
+              <PayrollPage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/users"
+        element={
+          <RequireAuth>
+            <AppLayout>
+              <UsersPage />
             </AppLayout>
           </RequireAuth>
         }

@@ -57,9 +57,16 @@ public class PcRateService {
 
     // Used by payroll (attendance module) to price PC-rate employees' production output.
     public java.math.BigDecimal getActiveRate(Long workstationId, Long operationId) {
+        return findActiveRate(workstationId, operationId)
+                .orElseThrow(() -> new NotFoundException("No active PC rate for this workstation/operation."));
+    }
+
+    // Non-throwing lookup for reports/payroll that price many ops at once, where an
+    // operation with no configured rate should simply contribute zero income rather
+    // than abort the whole run.
+    public java.util.Optional<java.math.BigDecimal> findActiveRate(Long workstationId, Long operationId) {
         return pcRateRepository
                 .findByWorkstationIdAndOperationIdAndActiveTrueOrderByEffectiveDateDescCreatedAtDesc(workstationId, operationId)
-                .stream().findFirst().map(PcRate::getRate)
-                .orElseThrow(() -> new NotFoundException("No active PC rate for this workstation/operation."));
+                .stream().findFirst().map(PcRate::getRate);
     }
 }

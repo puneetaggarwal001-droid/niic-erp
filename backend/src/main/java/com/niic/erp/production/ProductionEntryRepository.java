@@ -13,6 +13,10 @@ public interface ProductionEntryRepository extends JpaRepository<ProductionEntry
 
     List<ProductionEntry> findByJobId(Long jobId);
 
+    List<ProductionEntry> findByDateBetween(LocalDate from, LocalDate to);
+
+    List<ProductionEntry> findByEmployeeIdAndDateBetween(Long employeeId, LocalDate from, LocalDate to);
+
     // Null-safe match on the (date, employee, job, colour, size, side) merge key —
     // see production package-info; plain equality on a null bind parameter would
     // never match a null column.

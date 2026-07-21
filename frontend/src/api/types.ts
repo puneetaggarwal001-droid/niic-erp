@@ -11,6 +11,30 @@ export interface CurrentUser {
   rights: string[];
 }
 
+export type Role = 'ADMIN' | 'ENTRY_USER' | 'STORE_ADMIN';
+
+export interface AppUser {
+  id: number;
+  username: string;
+  role: Role;
+  active: boolean;
+  rights: string[];
+}
+
+export interface CreateUserRequest {
+  username: string;
+  password: string;
+  role: Role;
+  rights: string[];
+}
+
+export interface UpdateUserRequest {
+  role: Role;
+  rights: string[];
+  active: boolean;
+  password?: string;
+}
+
 export interface Designation {
   id: number;
   name: string;

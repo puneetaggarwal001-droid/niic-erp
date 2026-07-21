@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createDesignation, createEmployee, listDesignations, listEmployees } from '../api/employees';
+import {
+  createDesignation,
+  createEmployee,
+  deactivateEmployee,
+  listDesignations,
+  listEmployees,
+  updateEmployee,
+} from '../api/employees';
 import { listWorkstations } from '../api/production';
 import type { Designation, Employee, EmployeeRequest, SalaryType } from '../api/types';
 import type { Workstation } from '../api/productionTypes';
@@ -28,6 +35,7 @@ interface FormState {
   department: string;
   address: string;
   notes: string;
+  validTill: string;
   authorizedWorkstations: string[];
 }
 
@@ -45,8 +53,29 @@ const emptyForm: FormState = {
   department: '',
   address: '',
   notes: '',
+  validTill: '',
   authorizedWorkstations: [],
 };
+
+function formFromEmployee(e: Employee): FormState {
+  return {
+    name: e.name,
+    aadhar: e.aadhar,
+    phone: e.phone,
+    designationId: e.designationId,
+    dateOfJoining: e.dateOfJoining,
+    salaryType: e.salaryType,
+    salary: e.salary != null ? String(e.salary) : '',
+    pcRate: e.pcRate != null ? String(e.pcRate) : '',
+    contractorName: e.contractorName ?? '',
+    empType: e.empType,
+    department: e.department ?? '',
+    address: e.address ?? '',
+    notes: e.notes ?? '',
+    validTill: e.validTill ?? '',
+    authorizedWorkstations: [...e.authorizedWorkstations],
+  };
+}
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -56,6 +85,8 @@ export default function EmployeesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
+  // The employee being edited, or null when adding a new one.
+  const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [newDesignation, setNewDesignation] = useState('');
   const [saving, setSaving] = useState(false);
@@ -88,6 +119,43 @@ export default function EmployeesPage() {
         ? prev.authorizedWorkstations.filter((c) => c !== code)
         : [...prev.authorizedWorkstations, code],
     }));
+  }
+
+  function openAddForm() {
+    setEditing(null);
+    setForm({ ...emptyForm, dateOfJoining: todayIso() });
+    setFormError(null);
+    setShowForm(true);
+  }
+
+  function startEdit(employee: Employee) {
+    setEditing(employee);
+    setForm(formFromEmployee(employee));
+    setFormError(null);
+    setMessage(null);
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditing(null);
+    setFormError(null);
+  }
+
+  async function handleDeactivate(employee: Employee) {
+    if (!window.confirm(`Deactivate ${employee.name} (${employee.empId})? They'll no longer appear in the active list.`)) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      await deactivateEmployee(employee.id);
+      setEmployees((prev) => prev.filter((e) => e.id !== employee.id));
+      if (editing?.id === employee.id) closeForm();
+      setMessage(`Deactivated ${employee.name} (${employee.empId}).`);
+    } catch (err) {
+      setError(extractError(err, 'Could not deactivate employee.'));
+    }
   }
 
   async function handleAddDesignation() {
@@ -126,22 +194,30 @@ export default function EmployeesPage() {
       ...(form.address.trim() ? { address: form.address.trim() } : {}),
       ...(form.department.trim() ? { department: form.department.trim() } : {}),
       ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
+      ...(form.validTill ? { validTill: form.validTill } : {}),
       ...(form.salaryType === 'SALARIED' && form.salary ? { salary: Number(form.salary) } : {}),
       ...(form.salaryType === 'PC_RATE' && form.pcRate ? { pcRate: Number(form.pcRate) } : {}),
       ...(form.salaryType === 'CONTRACTOR' && form.contractorName.trim()
         ? { contractorName: form.contractorName.trim() }
         : {}),
+      // Carry over fields the form doesn't manage so an edit doesn't wipe them.
+      ...(editing?.photoUrl ? { photoUrl: editing.photoUrl } : {}),
     };
 
     setSaving(true);
     try {
-      const created = await createEmployee(request);
-      setEmployees((prev) => [...prev, created]);
-      setMessage(`Added ${created.name} (${created.empId}).`);
-      setForm({ ...emptyForm, dateOfJoining: todayIso() });
-      setShowForm(false);
+      if (editing) {
+        const updated = await updateEmployee(editing.id, request);
+        setEmployees((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+        setMessage(`Updated ${updated.name} (${updated.empId}).`);
+      } else {
+        const created = await createEmployee(request);
+        setEmployees((prev) => [...prev, created]);
+        setMessage(`Added ${created.name} (${created.empId}).`);
+      }
+      closeForm();
     } catch (err) {
-      setFormError(extractError(err, 'Could not add employee.'));
+      setFormError(extractError(err, editing ? 'Could not update employee.' : 'Could not add employee.'));
     } finally {
       setSaving(false);
     }
@@ -156,20 +232,20 @@ export default function EmployeesPage() {
       {message && <p style={{ color: '#15803d' }}>{message}</p>}
 
       <div style={{ marginBottom: 16 }}>
-        <button
-          type="button"
-          onClick={() => {
-            setShowForm((s) => !s);
-            setFormError(null);
-          }}
-        >
-          {showForm ? 'Cancel' : '+ Add employee'}
-        </button>
+        {showForm ? (
+          <button type="button" onClick={closeForm}>
+            Cancel
+          </button>
+        ) : (
+          <button type="button" onClick={openAddForm}>
+            + Add employee
+          </button>
+        )}
       </div>
 
       {showForm && (
         <section style={{ marginBottom: 24 }}>
-          <h2>New employee</h2>
+          <h2>{editing ? `Edit ${editing.empId}` : 'New employee'}</h2>
           {formError && <p style={{ color: '#dc2626' }}>{formError}</p>}
           <form onSubmit={handleSubmit}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
@@ -259,6 +335,10 @@ export default function EmployeesPage() {
                 </select>
               </label>
               <label>
+                Valid till (optional)
+                <input type="date" value={form.validTill} onChange={(e) => update('validTill', e.target.value)} />
+              </label>
+              <label>
                 Department
                 <input value={form.department} onChange={(e) => update('department', e.target.value)} />
               </label>
@@ -311,7 +391,7 @@ export default function EmployeesPage() {
 
             <div style={{ marginTop: 16 }}>
               <button type="submit" disabled={saving}>
-                {saving ? 'Saving…' : 'Save employee'}
+                {saving ? 'Saving…' : editing ? 'Update employee' : 'Save employee'}
               </button>
             </div>
           </form>
@@ -326,6 +406,7 @@ export default function EmployeesPage() {
             <th>Designation</th>
             <th>Phone</th>
             <th>Workstations</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -336,6 +417,18 @@ export default function EmployeesPage() {
               <td>{e.designationName}</td>
               <td>{e.phone}</td>
               <td>{e.authorizedWorkstations.length ? e.authorizedWorkstations.join(', ') : '—'}</td>
+              <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                <button type="button" onClick={() => startEdit(e)}>
+                  Edit
+                </button>{' '}
+                <button
+                  type="button"
+                  onClick={() => handleDeactivate(e)}
+                  style={{ color: '#dc2626', borderColor: '#dc2626' }}
+                >
+                  Deactivate
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>

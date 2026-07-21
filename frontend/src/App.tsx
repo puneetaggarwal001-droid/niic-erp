@@ -16,6 +16,7 @@ import MastersPage from './pages/production/MastersPage';
 import JobsPage from './pages/production/JobsPage';
 import RoutingPage from './pages/production/RoutingPage';
 import ProductionEntryPage from './pages/production/ProductionEntryPage';
+import ProductionReportsPage from './pages/production/ProductionReportsPage';
 import OperationClosuresPage from './pages/production/OperationClosuresPage';
 import QcPage from './pages/production/QcPage';
 import TransferChallansPage from './pages/production/TransferChallansPage';
@@ -76,6 +77,9 @@ function AppLayout({ children }: { children: ReactNode }) {
           </Link>
           <Link to="/production/epr" style={{ color: '#fff' }}>
             EPR
+          </Link>
+          <Link to="/production/reports" style={{ color: '#fff' }}>
+            Reports
           </Link>
           <Link to="/production/masters" style={{ color: '#fff' }}>
             Masters
@@ -221,6 +225,16 @@ export default function App() {
           <RequireAuth>
             <AppLayout>
               <EprPage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/production/reports"
+        element={
+          <RequireAuth>
+            <AppLayout>
+              <ProductionReportsPage />
             </AppLayout>
           </RequireAuth>
         }

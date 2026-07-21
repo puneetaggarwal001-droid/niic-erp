@@ -1,8 +1,8 @@
 name: gitleaks
 
-# Blocks secrets from ever being committed again — the whole repo history is
-# scanned on every push and PR. This is the guardrail that would have caught the
-# leaked Firebase config and default credentials before they reached the remote.
+# Blocks secrets from ever being committed again. Scans the full repository
+# history on every push and PR with the gitleaks CLI directly — the marketplace
+# action does an incremental diff that breaks on a repo's parent-less root commit.
 on:
   push:
   pull_request:
@@ -14,6 +14,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # full history, so a secret in any commit fails the run
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install gitleaks
+        run: |
+          VERSION=8.24.3
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: Scan repository history
+        run: gitleaks git --config .gitleaks.toml --redact --no-banner --verbose

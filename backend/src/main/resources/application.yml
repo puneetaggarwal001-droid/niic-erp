@@ -50,3 +50,9 @@ spring:
     username: ${ERP_DB_USER:erp}
     password: ${ERP_DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
+
+erp:
+  jwt:
+    # Required in prod — no fallback. Startup fails fast if ERP_JWT_SECRET is unset,
+    # so a prod deployment can never sign tokens with the committed dev default.
+    secret: ${ERP_JWT_SECRET}

@@ -15,3 +15,8 @@ export async function listDesignations(): Promise<Designation[]> {
   const { data } = await apiClient.get<Designation[]>('/designations');
   return data;
 }
+
+export async function createDesignation(name: string): Promise<Designation> {
+  const { data } = await apiClient.post<Designation>('/designations', { name });
+  return data;
+}

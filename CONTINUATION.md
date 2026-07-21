@@ -33,9 +33,10 @@ a task list to blindly execute.
   Homebrew formula. Set `JAVA_HOME="/opt/homebrew/opt/openjdk@21"` before
   running `mvn`.
 - Backend dev DB is an H2 file DB under `backend/data/` (gitignored). If
-  you delete it, all previously-created runtime data (users beyond the
-  seeded `admin`/`***REMOVED***`, jobs, workstations, etc.) is gone and needs
-  re-seeding manually through the UI.
+  you delete it, all previously-created runtime data (the bootstrapped admin,
+  jobs, workstations, etc.) is gone. On next startup `AdminBootstrap` recreates
+  the admin (set `ERP_ADMIN_PASSWORD`, or read the generated dev password from
+  the logs); everything else is re-seeded manually through the UI.
 
 ## Known frontend gotcha
 
@@ -74,7 +75,8 @@ regression assertions covering the exact endpoints that broke.
 ## Suggested next step
 
 Resume manual browser verification of the production frontend: log in
-as `admin`/`***REMOVED***`, re-create a Stitching + Packing workstation and a
+as the bootstrapped `admin` (password from `ERP_ADMIN_PASSWORD` or the
+startup log), re-create a Stitching + Packing workstation and a
 Sew operation on the Masters page, create a test job, save its routing,
 log a production entry, and confirm the previously-broken list/GET
 endpoints (jobs, routing, entries, transfer challans) now return 200

@@ -19,7 +19,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 // clean schema, not whatever the last `mvn spring-boot:run` left on disk.
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "spring.datasource.url=jdbc:h2:mem:erp-test;DB_CLOSE_DELAY=-1")
+@TestPropertySource(properties = {
+        "spring.datasource.url=jdbc:h2:mem:erp-test;DB_CLOSE_DELAY=-1",
+        // Keep the admin-bootstrap password identical to AuthApiTest so the shared
+        // erp-test context stays consistent.
+        "erp.admin.password=test-admin-pw"})
 class AttendanceApiTest {
 
     @Autowired

@@ -39,16 +39,23 @@ mvn spring-boot:run
 
 Starts on `http://localhost:8080`. Default profile (`dev`) uses a local H2
 file database at `backend/data/erp-dev.mv.db` — no external DB needed. Flyway
-runs the migration in `src/main/resources/db/migration/` automatically and
-seeds one admin account:
+runs the migration in `src/main/resources/db/migration/` automatically.
 
-- username: `admin`
-- password: `***REMOVED***`
+No admin credential is seeded in the schema. On first startup, `AdminBootstrap`
+creates the initial admin (username `admin` by default):
 
-**Change or remove that seed user before this touches real data.**
+- In dev, set `ERP_ADMIN_PASSWORD` to choose the password, or leave it unset and
+  a random password is generated and printed once to the logs (search for
+  "created initial admin").
+- In prod, `ERP_ADMIN_PASSWORD` is **required** — startup fails fast if it is
+  unset, so no deployment ever runs on a guessable default.
+
+Override the username with `ERP_ADMIN_USERNAME`. Change the admin password after
+first login.
 
 For Postgres instead of H2, run with `--spring.profiles.active=prod` and set
-`ERP_DB_URL` / `ERP_DB_USER` / `ERP_DB_PASSWORD` env vars.
+`ERP_DB_URL` / `ERP_DB_USER` / `ERP_DB_PASSWORD` env vars. Prod also requires
+`ERP_JWT_SECRET` (>= 32 bytes) and `ERP_ADMIN_PASSWORD`.
 
 Run tests: `mvn test`.
 

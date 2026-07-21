@@ -34,7 +34,10 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 // state pollution.
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "spring.datasource.url=jdbc:h2:mem:production-test;DB_CLOSE_DELAY=-1")
+@TestPropertySource(properties = {
+        "spring.datasource.url=jdbc:h2:mem:production-test;DB_CLOSE_DELAY=-1",
+        // Provision the admin via config so tests don't depend on a shipped default.
+        "erp.admin.password=test-admin-pw"})
 class ProductionApiTest {
 
     @Autowired
@@ -63,7 +66,7 @@ class ProductionApiTest {
     @BeforeEach
     void login() throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("username", "admin", "password", "***REMOVED***"))))
+                        .content(objectMapper.writeValueAsString(Map.of("username", "admin", "password", "test-admin-pw"))))
                 .andExpect(status().isOk()).andReturn();
         jwt = objectMapper.readTree(result.getResponse().getContentAsString()).get("token").asText();
     }

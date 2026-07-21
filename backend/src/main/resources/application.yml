@@ -22,6 +22,12 @@ erp:
     # Dev-only secret. Override with the ERP_JWT_SECRET env var in any real deployment.
     secret: ${ERP_JWT_SECRET:dev-only-secret-change-me-dev-only-secret-change-me}
     expiration-minutes: 480
+  admin:
+    # Initial admin created at startup by AdminBootstrap (no default is seeded in
+    # the schema). Required in prod; blank in dev means a random password is
+    # generated and logged once.
+    username: ${ERP_ADMIN_USERNAME:admin}
+    password: ${ERP_ADMIN_PASSWORD:}
   cors:
     allowed-origins: ${ERP_CORS_ORIGINS:http://localhost:5173}
 

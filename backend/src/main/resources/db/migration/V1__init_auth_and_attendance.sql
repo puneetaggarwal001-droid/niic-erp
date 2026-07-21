@@ -66,8 +66,6 @@ create table attendance_records (
     constraint uk_attendance_date_employee unique (date, employee_id)
 );
 
--- Seed an initial admin so there's a way to log in on a fresh database.
--- Username: admin  /  Password: ***REMOVED***  (BCrypt hash below) — CHANGE THIS before any shared/prod use.
-insert into users (username, password_hash, role, active, created_at, updated_at)
-values ('admin', '***REMOVED***', 'ADMIN', true,
-        current_timestamp, current_timestamp);
+-- No admin is seeded here. The initial admin is created at startup by AdminBootstrap
+-- from ERP_ADMIN_PASSWORD (required in prod, a random logged-once value in dev), so no
+-- known default credential ever ships in the schema.

@@ -1,0 +1,19 @@
+title = "NIIC ERP gitleaks config"
+
+# Start from gitleaks' built-in rule set, then allowlist the few known-safe
+# placeholders so CI flags real secrets without false positives.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known-safe dev placeholders — not real credentials"
+regexes = [
+  # Dev-only JWT signing key committed as an env-overridable default in
+  # application.yml. Harmless in dev; prod fails fast if it is not overridden
+  # (see JwtService / AdminBootstrap).
+  '''dev-only-secret-change-me-dev-only-secret-change-me''',
+]
+paths = [
+  # Generated lockfiles — hashes here are integrity digests, not secrets.
+  '''frontend/package-lock\.json''',
+]

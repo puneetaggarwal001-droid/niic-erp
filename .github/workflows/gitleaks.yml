@@ -1,0 +1,19 @@
+name: gitleaks
+
+# Blocks secrets from ever being committed again — the whole repo history is
+# scanned on every push and PR. This is the guardrail that would have caught the
+# leaked Firebase config and default credentials before they reached the remote.
+on:
+  push:
+  pull_request:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, so a secret in any commit fails the run
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

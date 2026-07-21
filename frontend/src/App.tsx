@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import { RequireAuth } from './components/RequireAuth';
 import { useAuth } from './context/AuthContext';
 import AttendancePage from './pages/AttendancePage';
+import DashboardPage from './pages/DashboardPage';
 import GatePassPage from './pages/GatePassPage';
 import EmployeesPage from './pages/EmployeesPage';
 import UsersPage from './pages/UsersPage';
@@ -35,6 +36,11 @@ function AppLayout({ children }: { children: ReactNode }) {
         }}
       >
         <nav style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {isAdmin && (
+            <Link to="/dashboard" style={{ color: '#fff' }}>
+              Dashboard
+            </Link>
+          )}
           <Link to="/employees" style={{ color: '#fff' }}>
             Employees
           </Link>
@@ -99,6 +105,16 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/dashboard"
+        element={
+          <RequireAuth>
+            <AppLayout>
+              <DashboardPage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
       <Route
         path="/employees"
         element={

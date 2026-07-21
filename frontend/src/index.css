@@ -1,0 +1,182 @@
+:root {
+  --navy: #1b2e72;
+  --navy-dark: #16255c;
+  --page-bg: #f4f6fb;
+  --card-bg: #ffffff;
+  --border: #e6e9f2;
+  --border-strong: #cbd2e1;
+  --text: #1f2430;
+  --muted: #6b7280;
+  --focus: #3b53b5;
+  --danger: #dc2626;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(16, 24, 64, 0.06), 0 1px 2px rgba(16, 24, 64, 0.04);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--page-bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---- Typography ---- */
+h1 {
+  font-size: 22px;
+  font-weight: 650;
+  margin: 0 0 20px;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: 15px;
+  font-weight: 620;
+  margin: 0 0 14px;
+  color: var(--text);
+}
+
+a {
+  color: var(--navy);
+}
+
+label {
+  font-weight: 550;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* ---- Page shell ---- */
+main {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* Each page section becomes a card. Pages set only margin/flex inline, so
+   background / border / padding / radius all take effect here. */
+main section {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+
+/* ---- Form controls ---- */
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 7px 10px;
+  min-height: 34px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9aa2b1;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(59, 83, 181, 0.15);
+}
+
+select {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%236b7280' stroke-width='1.5' d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  padding-right: 28px;
+}
+
+input:disabled,
+select:disabled,
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---- Buttons ---- */
+button {
+  font: inherit;
+  font-weight: 550;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: #fff;
+  color: var(--text);
+  padding: 7px 14px;
+  min-height: 34px;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+button:hover:not(:disabled) {
+  background: #f3f5fa;
+  border-color: #b4bccd;
+}
+
+button[type='submit'] {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
+button[type='submit']:hover:not(:disabled) {
+  background: var(--navy-dark);
+  border-color: var(--navy-dark);
+}
+
+/* ---- Tables ---- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+th {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+tbody tr:hover {
+  background: #fafbfe;
+}
+
+/* ---- Header nav (styled inline in App.tsx; refine link behaviour here) ---- */
+header nav a {
+  text-decoration: none;
+  opacity: 0.85;
+  padding: 4px 2px;
+  transition: opacity 0.12s ease;
+}
+
+header nav a:hover {
+  opacity: 1;
+  text-decoration: underline;
+}

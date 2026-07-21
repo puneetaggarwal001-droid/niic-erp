@@ -1,0 +1,23 @@
+# Node / frontend
+node_modules/
+dist/
+*.local
+
+# Java / backend build output
+target/
+
+# H2 dev database & data dir
+backend/data/
+
+# Logs
+*.log
+
+# OS / editor cruft
+.DS_Store
+*.swp
+
+# Local Claude Code settings (keep launch.json shared)
+.claude/settings.local.json
+
+# Stale pre-split snapshot of the project, kept only as a local backup
+niic-erp-main/

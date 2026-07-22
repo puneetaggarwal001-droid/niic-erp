@@ -1,0 +1,87 @@
+# Production stack: Postgres + Spring Boot backend + nginx-served React frontend,
+# fronted by Caddy for automatic HTTPS, with a scheduled Postgres backup.
+# Fill in ./.env (see .env.example) first, then: docker compose up -d --build
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: niic_erp
+      POSTGRES_USER: erp
+      POSTGRES_PASSWORD: ${ERP_DB_PASSWORD:?set ERP_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp -d niic_erp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      ERP_DB_URL: jdbc:postgresql://db:5432/niic_erp
+      ERP_DB_USER: erp
+      ERP_DB_PASSWORD: ${ERP_DB_PASSWORD:?set ERP_DB_PASSWORD in .env}
+      ERP_JWT_SECRET: ${ERP_JWT_SECRET:?set ERP_JWT_SECRET in .env}
+      ERP_ADMIN_USERNAME: ${ERP_ADMIN_USERNAME:-admin}
+      ERP_ADMIN_PASSWORD: ${ERP_ADMIN_PASSWORD:?set ERP_ADMIN_PASSWORD in .env}
+      # Same-origin behind Caddy means CORS is not exercised in normal use; keep
+      # this aligned with SITE_ADDRESS in case the API is ever hit cross-origin.
+      ERP_CORS_ORIGINS: ${ERP_CORS_ORIGINS:-https://localhost}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # TLS termination + HTTP->HTTPS redirect. Caddy auto-provisions a Let's Encrypt
+  # certificate when SITE_ADDRESS is a public domain, and uses its own local CA
+  # (self-signed) for "localhost" or an ":443" address. It reverse-proxies to the
+  # frontend, which in turn proxies /api to the backend.
+  caddy:
+    image: caddy:2
+    depends_on:
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-https://localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+  # Scheduled pg_dump with retention. Writes compressed dumps to ./backups on the
+  # host. WARNING: these dumps contain employee PII — keep ./backups off git
+  # (already gitignored) and secure/offsite it.
+  db-backup:
+    image: prodrigestivill/postgres-backup-local:16
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: niic_erp
+      POSTGRES_USER: erp
+      POSTGRES_PASSWORD: ${ERP_DB_PASSWORD:?set ERP_DB_PASSWORD in .env}
+      SCHEDULE: ${BACKUP_SCHEDULE:-@daily}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-8}
+      BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-6}
+    volumes:
+      - ./backups:/backups
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

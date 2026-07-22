@@ -8,7 +8,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -21,8 +20,8 @@ public class RoutingChangeRequest extends BaseEntity {
     @JoinColumn(name = "job_id", nullable = false)
     private Job job;
 
-    // Serialized List<RoutingWorkstationRequest> — same reasoning as JobRequest.coloursJson.
-    @Lob
+    // Serialized List<RoutingWorkstationRequest> — same reasoning as JobRequest.coloursJson,
+    // and mapped to a plain text column (not @Lob) for H2/Postgres portability.
     @Column(nullable = false)
     private String proposedRoutingJson;
 

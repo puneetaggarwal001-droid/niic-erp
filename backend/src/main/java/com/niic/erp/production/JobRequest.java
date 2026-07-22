@@ -8,7 +8,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -31,8 +30,10 @@ public class JobRequest extends BaseEntity {
     private Unit unit;
 
     // Serialized List<JobColourRequest> — see production package-info for why
-    // this staging data isn't modeled relationally like the live Job is.
-    @Lob
+    // this staging data isn't modeled relationally like the live Job is. Mapped
+    // to a plain text column (not @Lob/CLOB) so schema validation passes on both
+    // H2 and Postgres — Postgres maps @Lob String to oid, which the text column
+    // in the migration would not match.
     @Column(nullable = false)
     private String coloursJson;
 

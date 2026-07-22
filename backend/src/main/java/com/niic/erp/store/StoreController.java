@@ -10,6 +10,7 @@ import com.niic.erp.store.dto.StockTxnRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -53,6 +54,7 @@ public class StoreController {
     }
 
     @PostMapping("/items")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('create_item')")
     @ResponseStatus(HttpStatus.CREATED)
     public ItemDto createItem(@Valid @RequestBody ItemRequest request) {
         List<StoreService.VariantSpec> variants = request.variants() != null
@@ -85,6 +87,7 @@ public class StoreController {
     }
 
     @PostMapping("/stock")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('store_entry')")
     @ResponseStatus(HttpStatus.CREATED)
     public StockTxnDto recordStock(@Valid @RequestBody StockTxnRequest request) {
         return StockTxnDto.from(storeService.recordTransaction(request.itemId(), request.variantId(),

@@ -90,6 +90,20 @@
       <artifactId>spring-security-test</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Runs a real PostgreSQL binary in-process so migrations are validated
+         against Postgres (not just the H2 dev DB) without needing Docker. -->
+    <dependency>
+      <groupId>io.zonky.test</groupId>
+      <artifactId>embedded-postgres</artifactId>
+      <version>2.0.7</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.zonky.test.postgres</groupId>
+      <artifactId>embedded-postgres-binaries-darwin-arm64v8</artifactId>
+      <version>16.2.0</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

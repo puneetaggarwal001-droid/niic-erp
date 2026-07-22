@@ -45,6 +45,7 @@ public class SampleController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('sampling_access')")
     @ResponseStatus(HttpStatus.CREATED)
     public SampleDto create(@Valid @RequestBody SampleForm form,
                             @RequestParam(defaultValue = "false") boolean submit) {
@@ -52,6 +53,7 @@ public class SampleController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('sampling_access')")
     public SampleDto update(@PathVariable Long id, @Valid @RequestBody SampleForm form,
                             @RequestParam(defaultValue = "false") boolean submit) {
         return sampleService.update(id, form, submit);
@@ -65,6 +67,7 @@ public class SampleController {
     }
 
     @PostMapping("/{id}/submit")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('sampling_access')")
     public SampleDto submit(@PathVariable Long id) {
         return sampleService.submit(id);
     }
@@ -88,33 +91,39 @@ public class SampleController {
     }
 
     @PostMapping("/{id}/revise")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('sampling_access')")
     public SampleDto revise(@PathVariable Long id) {
         return sampleService.revise(id);
     }
 
     @PostMapping("/{id}/pps")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('sampling_access')")
     public SampleDto savePps(@PathVariable Long id, @RequestBody PpsForm form,
                              @RequestParam(defaultValue = "false") boolean approve) {
         return sampleService.savePps(id, form, approve);
     }
 
     @PostMapping("/{id}/ppm")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('sampling_access')")
     public SampleDto savePpm(@PathVariable Long id, @Valid @RequestBody PpmForm form) {
         return sampleService.savePpm(id, form);
     }
 
     @PostMapping("/{id}/ppm/complete")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('sampling_access')")
     public SampleDto completePpm(@PathVariable Long id) {
         return sampleService.completePpm(id);
     }
 
     @PostMapping("/{id}/photos")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('sampling_access')")
     @ResponseStatus(HttpStatus.CREATED)
     public PhotoDto addPhoto(@PathVariable Long id, @Valid @RequestBody PhotoForm form) {
         return sampleService.addPhoto(id, form);
     }
 
     @DeleteMapping("/{id}/photos/{photoId}")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('sampling_access')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deletePhoto(@PathVariable Long id, @PathVariable Long photoId) {
         sampleService.deletePhoto(id, photoId);

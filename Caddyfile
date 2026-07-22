@@ -1,0 +1,11 @@
+# SITE_ADDRESS controls how Caddy serves and secures the site:
+#   https://erp.example.com   -> automatic Let's Encrypt certificate (needs a
+#                                public domain pointing at this host + ports 80/443)
+#   https://localhost         -> Caddy's local self-signed CA (browser warning; fine
+#                                for testing)
+#   :443                      -> add `tls internal` below for an internal-only host
+#                                reached by IP with no public domain
+{$SITE_ADDRESS} {
+	encode gzip
+	reverse_proxy frontend:80
+}

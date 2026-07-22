@@ -9,6 +9,14 @@ target/
 # H2 dev database & data dir
 backend/data/
 
+# Secrets — real deployment env, never commit (see .env.example for the template)
+.env
+.env.*
+!.env.example
+
+# Database backups — contain employee PII (Aadhaar, salary). Never commit.
+backups/
+
 # Logs
 *.log
 

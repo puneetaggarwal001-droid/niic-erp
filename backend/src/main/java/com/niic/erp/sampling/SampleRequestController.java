@@ -45,6 +45,7 @@ public class SampleRequestController {
     }
 
     @PostMapping("/{id}/start")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('sampling_access')")
     public SampleRequestDto start(@PathVariable Long id) {
         return requestService.start(id);
     }
@@ -56,6 +57,7 @@ public class SampleRequestController {
     }
 
     @PostMapping("/{id}/complete")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('sampling_access')")
     public SampleRequestDto complete(@PathVariable Long id, @Valid @RequestBody CompleteRequestForm form) {
         return requestService.complete(id, form.completedSampleId());
     }

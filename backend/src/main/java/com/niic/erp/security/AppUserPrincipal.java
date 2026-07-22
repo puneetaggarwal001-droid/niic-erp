@@ -1,6 +1,7 @@
 package com.niic.erp.security;
 
 import com.niic.erp.user.User;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -20,7 +21,15 @@ public class AppUserPrincipal implements UserDetails {
 
     @Override
     public List<GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
+        // Role becomes a ROLE_ authority; each per-user right becomes a bare authority
+        // so method security can gate on hasAuthority('manage_employees') etc. Admins
+        // still pass those checks via hasRole('ADMIN') without carrying the right keys.
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
+        for (String right : user.getRights()) {
+            authorities.add(new SimpleGrantedAuthority(right));
+        }
+        return authorities;
     }
 
     @Override

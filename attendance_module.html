@@ -1209,6 +1209,8 @@ html, body { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
         <h2>👥 Employee Master</h2>
         <div style="display:flex;gap:8px;align-items:center;">
           <input type="text" id="empSearchBox" placeholder="Search name / ID / phone…" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:6px;font-size:.85rem;width:200px;" oninput="runEmpSearch()">
+          <button class="btn btn-sm" style="background:#f0fdf4;border:1px solid #86efac;color:#16a34a;" onclick="downloadMasterTemplate()" title="Download Excel template">📤 Template</button>
+          <button class="btn btn-sm" style="background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8;" onclick="masterImportFromExcel()" title="Import master data from Excel">📥 Import Excel</button>
           <button class="btn btn-green btn-sm" onclick="openAddEmp()">+ Add Employee</button>
         </div>
       </div>
@@ -1360,6 +1362,17 @@ html, body { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
       <div class="card-body">
         <div class="alert alert-info" id="cjAdminNote">Admin: Job goes live immediately after creation.</div>
         <div class="alert alert-warn" id="cjUserNote" style="display:none;">Entry User: Job requires Admin approval before going live.</div>
+        <!-- Mode Toggle -->
+        <div style="display:flex;gap:0;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:16px;width:fit-content;">
+          <button id="cjModeFg" onclick="cjSetMode('fg')"
+            style="padding:7px 18px;border:none;background:#1d4ed8;color:#fff;font-weight:700;cursor:pointer;font-size:.85rem;transition:all .2s;">
+            📦 From FG Item
+          </button>
+          <button id="cjModeManual" onclick="cjSetMode('manual')"
+            style="padding:7px 18px;border:none;background:#f1f5f9;color:#374151;font-weight:400;cursor:pointer;font-size:.85rem;transition:all .2s;">
+            ✏️ Manual Entry
+          </button>
+        </div>
         <!-- Step 1: Basic Info -->
         <div class="section-divider">Step 1 — Basic Information</div>
         <div class="form-row cols-3">
@@ -1373,9 +1386,28 @@ html, body { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
             <label>Job ID (Auto-generated)</label>
             <div class="job-id-display" id="cjJobIdDisplay">Select style first…</div>
           </div>
-          <div class="field">
+          <div class="field" id="cjFgItemField">
             <label>Model No. / Article ✱</label>
             <select id="cjModelNo" onchange="onCjModelNoChange()"><option value="">— Select FG item —</option></select>
+          </div>
+        </div>
+        <!-- Manual mode: Model name + unit -->
+        <div id="cjManualModelRow" style="display:none;margin-top:-8px;margin-bottom:12px;">
+          <div class="form-row" style="max-width:500px;">
+            <div class="field">
+              <label>Model No. / Article ✱</label>
+              <input type="text" id="cjManualModelInput" placeholder="e.g. Formal Shirt 001" style="width:100%;"
+                oninput="_cjState.manualModelName=this.value.trim();_cjState.modelNo=_cjState.manualModelName;">
+            </div>
+            <div class="field" style="max-width:130px;">
+              <label>Unit</label>
+              <select id="cjManualUnit" onchange="_cjState.fgUnit=this.value;cjRenderColours();">
+                <option value="PCS">PCS</option>
+                <option value="PAIR">PAIR</option>
+                <option value="SET">SET</option>
+                <option value="DZ">DZ</option>
+              </select>
+            </div>
           </div>
         </div>
         <!-- Step 2: Colours & Sizes -->
@@ -1504,7 +1536,10 @@ html, body { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
     <div class="card">
       <div class="card-header">
         <h2>🏭 Workstation Master</h2>
-        <button class="btn btn-green btn-sm" onclick="openAddWst()">+ Add Workstation</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm" style="background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8;" onclick="masterImportFromExcel()" title="Import master data from Excel">📥 Import Excel</button>
+          <button class="btn btn-green btn-sm" onclick="openAddWst()">+ Add Workstation</button>
+        </div>
       </div>
       <div class="card-body">
         <div class="table-wrap"><table>
@@ -1854,6 +1889,11 @@ html, body { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
     <div id="payRunView"></div>
   </div>
 
+  <!-- CRM MODULE -->
+  <div class="tab-content" id="tab-crm-orders"></div>
+  <div class="tab-content" id="tab-crm-fg"></div>
+  <div class="tab-content" id="tab-crm-packing"></div>
+
   <!-- PAYROLL MODALS -->
 
   <!-- Add Advance -->
@@ -1967,6 +2007,11 @@ html, body { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
 
   </div><!-- /appContent -->
 </div><!-- /appView -->
+
+<!-- ══ ORDER BOOKING VIEW (order_booking right — sibling of appView) ══════ -->
+<div id="orderBookingView" class="view" style="min-height:100vh;background:#f1f5f9;">
+  <div id="orderBookingContent"></div>
+</div>
 
 <!-- ── QC QUICK-ENTRY MODAL (auto-opens after production save) ─────── -->
 <div class="modal-overlay" id="modalQCQuick">
@@ -2558,11 +2603,37 @@ html, body { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
   </div>
 </div>
 
+<!-- ── Master Data Import Modal ───────────────────────────────────────────── -->
+<div class="modal-overlay" id="modalMasterImport" style="display:none;">
+  <div class="modal modal-lg" style="max-width:600px;">
+    <h3>📥 Import Master Data from Excel</h3>
+    <div style="margin-bottom:14px;font-size:.85rem;color:#555;">
+      Upload the Excel template (.xlsx) with your master data. Each sheet is imported independently — empty sheets are skipped.
+    </div>
+    <div style="border:2px dashed #cbd5e1;border-radius:10px;padding:24px;text-align:center;background:#f8fafc;margin-bottom:14px;">
+      <div style="font-size:2rem;margin-bottom:8px;">📂</div>
+      <div style="font-weight:600;color:#1e40af;margin-bottom:6px;">Choose Excel File</div>
+      <div style="font-size:.78rem;color:#64748b;margin-bottom:10px;">Supported: .xlsx, .xls</div>
+      <input type="file" id="masterImportFile" accept=".xlsx,.xls" onchange="_onMasterFileChange(this)"
+        style="display:none;">
+      <button class="btn btn-primary btn-sm" onclick="document.getElementById('masterImportFile').click()">Browse…</button>
+      <span id="masterImportFileName" style="margin-left:10px;font-size:.82rem;color:#374151;"></span>
+    </div>
+    <div id="masterImportPreview" style="display:none;margin-bottom:14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;font-size:.85rem;">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalMasterImport').style.display='none';">Cancel</button>
+      <button class="btn btn-primary" id="btnDoMasterImport" style="display:none;" onclick="_doMasterImport()">📥 Import Now</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <!-- ══ JAVASCRIPT ══════════════════════════════════════════════════════════════ -->
 <!-- Firebase SDK (compat v10 — works with existing synchronous code pattern) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -2613,6 +2684,21 @@ try {
 
 const FS_COLLECTION = 'niic_erp_data'; // Firestore collection name
 
+// ── PHOTO CACHE ───────────────────────────────────────────────────────────────
+// Photos are too large for localStorage quota, so they're stripped before any
+// localStorage write. This in-memory map keeps them accessible within a session.
+// It's re-populated from Firestore on every sync, so all users see current photos.
+window._crmPhotoCache = {}; // { itemId: base64DataURL }
+
+function _crmExtractPhotosToCache(jsonStr) {
+  // Parse a crmItems JSON string and copy any photos into _crmPhotoCache.
+  try {
+    const arr = JSON.parse(jsonStr);
+    if (!Array.isArray(arr)) return;
+    arr.forEach(item => { if (item.id && item.photo) window._crmPhotoCache[item.id] = item.photo; });
+  } catch(_) {}
+}
+
 // ── FIRESTORE SYNC ────────────────────────────────────────────────────────────
 // Pull all ERP data from Firestore → write into localStorage → then start app.
 // This ensures all 3 users see the same data every time they open the ERP.
@@ -2626,8 +2712,12 @@ async function syncFromFirestore() {
       // Without this guard the 2-minute pull overwrites freshly saved data when
       // the fire-and-forget write hasn't committed before the next sync cycle.
       if (_dirtyKeys.has(doc.id) || _pendingQueue()[doc.id]) return; // skip unconfirmed writes
-      if (doc.data().value !== undefined)
+      if (doc.data().value !== undefined) {
         localStorage.setItem(doc.id, doc.data().value);
+        // If this is the items catalog, extract photos into in-memory cache
+        // before _purgeCachedPhotos strips them from localStorage.
+        if (doc.id === K.crmItems) _crmExtractPhotosToCache(doc.data().value);
+      }
     });
     _setSyncStatus('ok');
   } catch(e) {
@@ -2658,16 +2748,37 @@ function _pendingQueue() {
   try { return JSON.parse(localStorage.getItem(_PENDING_KEY) || '{}'); } catch(e) { return {}; }
 }
 function _addToPending(k, jsonStr) {
-  const q = _pendingQueue();
-  q[k] = { value: jsonStr, ts: Date.now() };
-  localStorage.setItem(_PENDING_KEY, JSON.stringify(q));
-  _updatePendingBadge();
+  // Strip photos from K.crmItems before queuing — photos are large (50KB+) and
+  // would quickly exhaust the 5MB localStorage quota when many items exist.
+  // The direct Firestore .set() call in _fsWrite still sends the FULL version
+  // (with photos) to the cloud. The queue is only a retry failsafe for the
+  // non-photo catalog fields (names, mrp, etc.) which are small.
+  let queueStr = jsonStr;
+  if (k === K.crmItems) {
+    try {
+      const arr = JSON.parse(jsonStr);
+      if (Array.isArray(arr))
+        queueStr = JSON.stringify(arr.map(i=>{ const c={...i}; delete c.photo; return c; }));
+    } catch(_) {}
+  }
+  try {
+    const q = _pendingQueue();
+    q[k] = { value: queueStr, ts: Date.now() };
+    localStorage.setItem(_PENDING_KEY, JSON.stringify(q));
+    _updatePendingBadge();
+  } catch(_) {
+    // Pending queue write failed (localStorage full) — the Firestore .set() call
+    // in _fsWrite still proceeds, so data is not lost.
+    console.warn('[NIIC ERP] Could not add', k, 'to pending queue — storage full. Firestore write still proceeding.');
+  }
 }
 function _removeFromPending(k) {
-  const q = _pendingQueue();
-  delete q[k];
-  localStorage.setItem(_PENDING_KEY, JSON.stringify(q));
-  _updatePendingBadge();
+  try {
+    const q = _pendingQueue();
+    delete q[k];
+    localStorage.setItem(_PENDING_KEY, JSON.stringify(q));
+    _updatePendingBadge();
+  } catch(_) {}
 }
 function _updatePendingBadge() {
   const count = Object.keys(_pendingQueue()).length;
@@ -2785,6 +2896,19 @@ setInterval(() => {
 <script>
 'use strict';
 
+// ── ENVIRONMENT DETECTION ─────────────────────────────────────────────────────
+// Local network / file:// = TEST environment → keys prefixed with 'test_'
+// Hosted domain = PRODUCTION → no prefix, live data untouched
+const _isTestEnv = (()=>{
+  const h = location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h === '' ||
+    location.protocol === 'file:' ||
+    /^192\.168\./.test(h) ||
+    /^10\./.test(h) ||
+    /^172\.(1[6-9]|2[0-9]|3[01])\./.test(h);
+})();
+const _envPrefix = _isTestEnv ? 'test_' : '';
+
 // ── STORAGE KEYS ─────────────────────────────────────────────────────────────
 const K = {
   // Attendance module
@@ -2846,16 +2970,54 @@ const K = {
   contractors:       'fpay_contractors',     // contractor master
   contractorBills:   'fpay_contractor_bills',// monthly contractor bills
   payrollRuns:       'fpay_runs',            // monthly payroll run records
+  // CRM module
+  crmItems:         'fcrm_items',        // CRM item catalog {id, name, mrp}
+  crmOrders:        'fcrm_orders',       // customer orders
+  crmFGStock:       'fcrm_fg_stock',     // FG warehouse stock entries
+  crmPackingLists:  'fcrm_packing',      // packing / dispatch lists
+  crmOrderEditReqs: 'fcrm_order_edits',  // pending order-edit approval requests
   // Backup metadata (not actual data — just tracks last backup timestamp)
   lastBackup:   'niic_last_backup',     // {ts, type, by} from most recent export
 };
+// Apply test prefix to ALL keys so test data never touches live Firestore docs or localStorage
+if(_isTestEnv){ Object.keys(K).forEach(k=>{ K[k]=_envPrefix+K[k]; }); }
 
 // ── DATA LAYER ────────────────────────────────────────────────────────────────
 const DB = {
   get(k)          { try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch{ return null; } },
   set(k,v)        {
     const str = JSON.stringify(v);
-    localStorage.setItem(k, str);   // immediate local write (keeps UI fast)
+    // Strip base64 photos from items before writing to localStorage —
+    // photos are large and preserved in Firestore; stripping prevents quota errors.
+    let localStr = str;
+    if(k === K.crmItems) {
+      try {
+        const arr = JSON.parse(str);
+        if(Array.isArray(arr)) {
+          // Keep photos in in-memory cache so they survive the localStorage strip
+          arr.forEach(item => { if(item.id && item.photo) window._crmPhotoCache[item.id] = item.photo; });
+          localStr = JSON.stringify(arr.map(i=>{ const c={...i}; delete c.photo; return c; }));
+        }
+      } catch(_) {}
+    }
+    const _tryWrite = s => { try{ localStorage.setItem(k,s); return true; }catch(_){ return false; } };
+    if(!_tryWrite(localStr)){
+      // Quota exceeded — aggressively free space then retry
+      const freeKeys=[K.crmItems,K.crmFGStock,K.crmPackingLists,
+        K.prodEntries,K.qcEntries,K.records,K.edits];
+      freeKeys.forEach(fk=>{ try{ if(fk&&fk!==k) localStorage.removeItem(fk); }catch(_){} });
+      if(!_tryWrite(localStr)){
+        // Last resort: clear everything except session-critical keys, then retry
+        const keep=new Set(['fatt_session','fatt_users']);
+        for(let i=localStorage.length-1;i>=0;i--){
+          const lk=localStorage.key(i);
+          if(lk&&!keep.has(lk)&&lk!==k){ try{ localStorage.removeItem(lk); }catch(_){} }
+        }
+        if(!_tryWrite(localStr)){
+          if(typeof toast==='function') toast('⚠️ Storage full — data saved to cloud. Reload the page if data seems missing.','error');
+        }
+      }
+    }
     _fsWrite(k, str);               // async cloud write (fire-and-forget)
   },
   users()         { return DB.get(K.users)        || []; },
@@ -2907,6 +3069,11 @@ const DB = {
   contractors()       { return DB.get(K.contractors)       || []; },
   contractorBills()   { return DB.get(K.contractorBills)   || []; },
   payrollRuns()       { return DB.get(K.payrollRuns)       || []; },
+  crmItems()          { return DB.get(K.crmItems)          || []; },
+  crmOrders()         { return DB.get(K.crmOrders)         || []; },
+  crmFGStock()        { return DB.get(K.crmFGStock)        || []; },
+  crmPackingLists()   { return DB.get(K.crmPackingLists)   || []; },
+  crmOrderEditReqs()  { return DB.get(K.crmOrderEditReqs)  || []; },
   lastBackup()    { return DB.get(K.lastBackup)   || null; },
   save(k,v)       { DB.set(k,v); },
 };
@@ -2924,6 +3091,8 @@ const RIGHTS = [
   { key:'approve_item',      label:'Approve Item',       desc:'Can approve or reject Item Master creation requests' },
   { key:'store_entry',       label:'Store Entry',        desc:'Can make RM/SFG/FG stock entries — purchase, issue, receive, dispatch' },
   { key:'sampling_access',   label:'Sampling Access',    desc:'Can create and manage samples, PPS and PPM in the Sampling module' },
+  { key:'crm_entry',         label:'CRM Entry',          desc:'Can create orders, add FG warehouse stock and create packing lists in CRM module' },
+  { key:'order_booking',     label:'Order Booking',      desc:'Can only access the simplified order booking form — no other modules visible' },
 ];
 
 const STYLES = [
@@ -3236,7 +3405,7 @@ async function doLogin() {
   if (_syncPromise) { try { await _syncPromise; } catch(e) { /* offline / rules — use localStorage */ } _syncPromise = null; }
 
   // Find ERP user profile
-  const profile = DB.users().find(x => x.username === u && x.isActive);
+  const profile = DB.users().find(x => x.username.toLowerCase() === u.toLowerCase() && x.isActive);
   if (!profile) { err.textContent = 'Invalid username or password.'; err.style.display = 'block'; return; }
 
   // ── Offline fallback: Firebase not available ───────────────────────────────
@@ -3426,9 +3595,37 @@ function _deactivateExpiredVisitors() {
   if(changed) DB.save(K.employees,emps);
 }
 
+function _purgeCachedPhotos(){
+  // Strip base64 photos from localStorage for crmItems — frees space immediately.
+  // Photos are saved to in-memory _crmPhotoCache first so they remain accessible.
+  try{
+    const raw=localStorage.getItem(K.crmItems);
+    if(!raw) return;
+    const arr=JSON.parse(raw);
+    if(!Array.isArray(arr)) return;
+    const hasPhotos=arr.some(i=>i.photo);
+    if(!hasPhotos) return;
+    // Rescue photos to in-memory cache before stripping
+    _crmExtractPhotosToCache(raw);
+    const stripped=JSON.stringify(arr.map(i=>{ const c={...i}; delete c.photo; return c; }));
+    localStorage.setItem(K.crmItems, stripped);
+  }catch(_){}
+}
+
 function startApp() {
+  _purgeCachedPhotos(); // free up space taken by stored base64 photos
   _deactivateExpiredVisitors();
   _startIdleWatch();
+  // Show persistent TEST MODE banner so staff always know which environment they're on
+  if(_isTestEnv){
+    const banner=document.createElement('div');
+    banner.id='testModeBanner';
+    banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#f59e0b;color:#1c1917;text-align:center;padding:5px 12px;font-size:.8rem;font-weight:700;letter-spacing:.5px;';
+    banner.innerHTML='⚠️ TEST MODE — Data entered here is isolated from the live system. This banner disappears on the hosted site.';
+    document.body.prepend(banner);
+    // Push app content down so banner doesn't overlap
+    document.body.style.paddingTop='30px';
+  }
   showView('appView');
   document.getElementById('headerUsername').textContent = session.username;
   const b = document.getElementById('headerRoleBadge');
@@ -3450,10 +3647,15 @@ function startApp() {
   _updatePendingBadge();
   // Apply saved dashboard section settings
   _applyDashSectionSettings();
-  // Admin → go straight to dashboard; entry users → home cards
+  // Admin → dashboard; order_booking users → dedicated booking view; others → home
+  const _su = DB.users().find(x=>x.id===session.userId);
+  const _isOrderBooker = session.role!=='admin' && (_su?.rights||[]).includes('order_booking')
+    && (_su?.rights||[]).every(r=>r==='order_booking');
   if (session.role === 'admin') {
     _activeSidebarMod = 'dashboard';
     openDashboard();
+  } else if (_isOrderBooker) {
+    openOrderBookingView();
   } else {
     goHome();
   }
@@ -3611,6 +3813,19 @@ const MODULE_TABS = {
     admin:      [{id:'tab-backup', label:'🛡️ Backup & Security'}],
     entry_user: [],
   },
+  crm: {
+    admin: [
+      {id:'tab-crm-orders',  label:'📋 Orders'},
+      {id:'tab-crm-fg',      label:'📦 FG Warehouse'},
+      {id:'tab-crm-packing', label:'🚚 Packing Lists'},
+    ],
+    crm_entry: [
+      {id:'tab-crm-orders',  label:'📋 Orders'},
+      {id:'tab-crm-fg',      label:'📦 FG Warehouse'},
+      {id:'tab-crm-packing', label:'🚚 Packing Lists'},
+    ],
+    entry_user: [],
+  },
   masters: {
     admin: [
       {id:'tab-prod-wst-master', label:'🏭 Workstations'},
@@ -3690,6 +3905,11 @@ const MODULE_DEFS = [
     {id:'tab-smp-pps',      label:'PPS'},
     {id:'tab-smp-ppm',      label:'PPM'},
   ]},
+  { id:'crm', label:'🛒 CRM', tabs:[
+    {id:'tab-crm-orders',  label:'Orders'},
+    {id:'tab-crm-fg',      label:'FG Warehouse'},
+    {id:'tab-crm-packing', label:'Packing Lists'},
+  ]},
   { id:'masters', label:'🗃️ Masters', tabs:[
     {id:'tab-prod-wst-master', label:'Workstations'},
     {id:'tab-prod-ops-master', label:'Operations'},
@@ -3742,6 +3962,8 @@ function getModuleTabs(mod) {
     tabs = (rights.includes('create_item')||rights.includes('store_entry')) ? MODULE_TABS.store.entry_user : [];
   } else if (mod==='sampling') {
     tabs = rights.includes('sampling_access') ? MODULE_TABS.sampling.sampling_access : [];
+  } else if (mod==='crm') {
+    tabs = rights.includes('crm_entry') ? MODULE_TABS.crm.crm_entry : [];
   } else {
     tabs = MODULE_TABS[mod]?.entry_user || [];
   }
@@ -3861,7 +4083,7 @@ function openModuleTab(mod, tabId) {
   document.getElementById('dashboardView')?.classList.remove('active');
   document.getElementById('headerBreadcrumb').style.display='flex';
   document.getElementById('breadcrumbModule').textContent =
-    mod==='attendance'?'👥 HR Module':mod==='backup'?'🛡️ Backup & Security':mod==='store'?'🏪 Store / Inventory':mod==='sampling'?'🎨 Sampling':mod==='masters'?'🗃️ Masters':'⚙️ Production';
+    mod==='attendance'?'👥 HR Module':mod==='backup'?'🛡️ Backup & Security':mod==='store'?'🏪 Store / Inventory':mod==='sampling'?'🎨 Sampling':mod==='crm'?'🛒 CRM':mod==='masters'?'🗃️ Masters':'⚙️ Production';
   buildTabBar(mod);
   document.getElementById('tabBar').classList.add('active');
   openTab(tabId, mod);
@@ -3962,6 +4184,10 @@ function refreshTab(id) {
     case 'tab-pay-advances':    renderPayAdvancesTab(); break;
     case 'tab-pay-contractors': renderPayContractorsTab(); break;
     case 'tab-pay-run':         renderPayRunTab(); break;
+    // CRM
+    case 'tab-crm-orders':  renderCRMOrdersTab(); break;
+    case 'tab-crm-fg':      renderCRMFGStockTab(); break;
+    case 'tab-crm-packing': renderCRMPackingTab(); break;
   }
 }
 
@@ -4270,7 +4496,7 @@ function renderDesignations() {
 }
 function openAddDesignation() { document.getElementById('addDesigName').value=''; openModal('modalAddDesig'); }
 function adminAddDesignation() {
-  const name=document.getElementById('addDesigName').value.trim(); if(!name) return toast('Enter a name.','error');
+  const name=_normStr(document.getElementById('addDesigName').value); if(!name) return toast('Enter a name.','error');
   const ds=DB.designations();
   if (ds.find(d=>d.name.toLowerCase()===name.toLowerCase())) return toast('Already exists.','error');
   ds.push({id:uid(),name,isActive:true,approvedBy:session.userId,createdAt:now()});
@@ -4573,9 +4799,19 @@ function renderUsers() {
       <td><span class="badge ${u.isActive?'badge-approved':'badge-inactive'}">${u.isActive?'Active':'Disabled'}</span></td>
       <td>${rightsCell}</td>
       <td class="text-muted">${formatDateDisplay(u.createdAt.split('T')[0])}</td>
-      <td>${!isMe?`${kickBtn}${editRightsBtn}${permsBtn}${logsBtn}<button class="btn btn-ghost btn-xs" onclick="toggleUser('${u.id}')">${u.isActive?'Disable':'Enable'}</button> <button class="btn btn-blue btn-xs" onclick="openChangePassword('${u.id}')">Reset Pwd</button>`:'—'}</td>
+      <td>${!isMe?`${kickBtn}${editRightsBtn}${permsBtn}${logsBtn}<button class="btn btn-ghost btn-xs" onclick="toggleUser('${u.id}')">${u.isActive?'Disable':'Enable'}</button> <button class="btn btn-blue btn-xs" onclick="openChangePassword('${u.id}')">Reset Pwd</button> <button class="btn btn-ghost btn-xs" style="color:#dc2626;" onclick="adminDeleteUser('${u.id}','${u.username}')">🗑️ Delete</button>`:'—'}</td>
     </tr>`;
   }).join('');
+}
+
+function adminDeleteUser(userId, username){
+  if(userId===session.userId){ toast("You cannot delete your own account.",'error'); return; }
+  if(!confirm(`Permanently delete user "${username}"? This cannot be undone.`)) return;
+  const users=DB.users().filter(u=>u.id!==userId);
+  DB.save(K.users,users);
+  toast(`User "${username}" deleted.`,'success');
+  renderUsers();
+  buildTabBar(activeModule);
 }
 
 // Generic right toggle (replaces old toggleJobRight)
@@ -4622,14 +4858,14 @@ function openAddUser() {
   openModal('modalAddUser');
 }
 async function adminAddUser() {
-  const un = document.getElementById('newUsername').value.trim();
+  let un = _normLow(document.getElementById('newUsername').value.trim()); // lowercase always
   const pw = document.getElementById('newPassword').value;
   const ro = document.getElementById('newRole').value;
   if (!un) return toast('Enter a username.', 'error');
   if (pw.length < 6) return toast('Password must be at least 6 characters.', 'error');
   if (!/^[a-zA-Z0-9_]+$/.test(un)) return toast('Username can only contain letters, numbers, and underscores.', 'error');
   const users = DB.users();
-  if (users.find(u => u.username === un)) return toast('Username already exists.', 'error');
+  if (users.find(u => u.username.toLowerCase() === un)) return toast('Username already exists.', 'error');
 
   const selectedRights = ro === 'admin' ? [] : RIGHTS.filter(r => {
     const cb = document.getElementById('nr_' + r.key); return cb && cb.checked;
@@ -5844,7 +6080,7 @@ function saveEditProdEntry() {
 // ════════════════════════════════════════════════════════════════════════════
 
 // State for the Create Job form
-let _cjState = { style:'', styleLabel:'', jobDisplayId:'', modelNo:'', fgItemId:'', fgUnit:'PCS', colours:[] };
+let _cjState = { mode:'fg', style:'', styleLabel:'', jobDisplayId:'', modelNo:'', manualModelName:'', fgItemId:'', fgUnit:'PCS', colours:[] };
 
 function renderCreateJobTab() {
   // Populate style dropdown
@@ -5854,6 +6090,8 @@ function renderCreateJobTab() {
   const fgSel=document.getElementById('cjModelNo');
   const fgItems=(DB.storeItems()||[]).filter(i=>i.itemType==='FG'&&i.approvalStatus==='approved');
   fgSel.innerHTML='<option value="">— Select FG item —</option>'+fgItems.map(i=>`<option value="${i.id}">${esc(i.itemName)} (${i.itemCode||''}) [${i.unit}]</option>`).join('');
+  // Auto-switch to manual if no approved FG items
+  if (!fgItems.length && _cjState.mode==='fg') _cjState.mode='manual';
   // Show correct note based on role
   const isAdmin=session.role==='admin';
   document.getElementById('cjAdminNote').style.display=isAdmin?'block':'none';
@@ -5862,6 +6100,25 @@ function renderCreateJobTab() {
   if (_cjState.style) sel.value=_cjState.style;
   document.getElementById('cjJobIdDisplay').textContent=_cjState.jobDisplayId||'Select style first…';
   if (_cjState.fgItemId) fgSel.value=_cjState.fgItemId;
+  cjSetMode(_cjState.mode);
+}
+
+function cjSetMode(mode) {
+  _cjState.mode=mode;
+  // Toggle mode buttons
+  const btnFg=document.getElementById('cjModeFg');
+  const btnManual=document.getElementById('cjModeManual');
+  if (btnFg) { btnFg.style.background=mode==='fg'?'#1d4ed8':'#f1f5f9'; btnFg.style.color=mode==='fg'?'#fff':'#374151'; btnFg.style.fontWeight=mode==='fg'?'700':'400'; }
+  if (btnManual) { btnManual.style.background=mode==='manual'?'#7c3aed':'#f1f5f9'; btnManual.style.color=mode==='manual'?'#fff':'#374151'; btnManual.style.fontWeight=mode==='manual'?'700':'400'; }
+  // Toggle FG vs manual fields
+  const fgField=document.getElementById('cjFgItemField');
+  const manualRow=document.getElementById('cjManualModelRow');
+  if (fgField) fgField.style.display=mode==='fg'?'':'none';
+  if (manualRow) manualRow.style.display=mode==='manual'?'':'none';
+  if (mode==='manual') {
+    _cjState.fgItemId=''; _cjState.fgUnit='PCS';
+    const fgSel=document.getElementById('cjModelNo'); if(fgSel) fgSel.value='';
+  }
   cjRenderColours();
 }
 
@@ -5943,9 +6200,43 @@ function cjToggleSize(ci,si) {
   if (chk) chk.checked=s.selected;
 }
 
-// Render the FG-variant-based colour/size selector
+// Render the colour/size selector (FG-variant mode OR manual mode)
 function cjRenderColours() {
   const c=document.getElementById('cjColoursContainer');
+  const addArea=document.getElementById('cjAddColourArea');
+
+  if (_cjState.mode==='manual') {
+    // Manual mode — editable colour name + size name + qty inputs
+    if (addArea) addArea.style.display='';
+    if (!_cjState.colours.length) {
+      c.innerHTML='<p class="text-muted" style="margin-bottom:12px;">Click <strong>+ Add Colour</strong> below to add colour/size combinations.</p>';
+      return;
+    }
+    const unitLabel=_cjState.fgUnit==='PAIR'?'pairs':'pcs';
+    c.innerHTML=_cjState.colours.map((col,ci)=>`
+      <div class="colour-block">
+        <div class="colour-block-header" style="display:flex;align-items:center;gap:8px;">
+          <span style="font-weight:700;font-size:.9rem;color:#1e293b;">🎨 Colour ${ci+1}</span>
+          <input type="text" id="cjCN_${ci}" value="${esc(col.name||'')}" placeholder="Colour name (e.g. Red)" style="flex:1;max-width:200px;padding:4px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:.85rem;" oninput="cjCollectManual()">
+          <button class="btn btn-ghost btn-xs" onclick="cjRemoveColour(${ci})" style="color:#dc2626;margin-left:auto;">✕ Remove</button>
+        </div>
+        <div class="size-rows" id="cjSizes_${ci}">
+          ${col.sizes.map((s,si)=>`
+            <div class="size-row" style="display:flex;align-items:center;gap:8px;">
+              <input type="text" id="cjSN_${ci}_${si}" value="${esc(s.size||s.name||'')}" placeholder="Size (e.g. M)" style="width:100px;padding:4px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:.85rem;" oninput="cjCollectManual()">
+              <input type="number" id="cjQT_${ci}_${si}" value="${s.plannedQty||''}" placeholder="Qty (${unitLabel})" min="1"
+                onchange="cjCollectManual()"
+                style="flex:1;min-width:120px;">
+              <button class="btn btn-ghost btn-xs" onclick="cjRemoveSize(${ci},${si})" style="color:#9ca3af;">✕</button>
+            </div>`).join('')}
+          <button class="btn btn-ghost btn-xs" onclick="cjAddSize(${ci})" style="margin-top:4px;color:#1d4ed8;">+ Add Size</button>
+        </div>
+      </div>`).join('');
+    return;
+  }
+
+  // FG-variant mode
+  if (addArea) addArea.style.display='none';
   if (!_cjState.fgItemId) {
     c.innerHTML='<p class="text-muted" style="margin-bottom:12px;">Select an FG item above to see available colours &amp; sizes.</p>';
     return;
@@ -5976,23 +6267,51 @@ function cjRenderColours() {
     </div>`).join('');
 }
 
+// Collect manual-mode colour/size/qty inputs into _cjState
+function cjCollectManual() {
+  _cjState.colours.forEach((col,ci)=>{
+    const cnEl=document.getElementById(`cjCN_${ci}`);
+    if (cnEl) col.name=cnEl.value.trim();
+    col.sizes.forEach((s,si)=>{
+      const snEl=document.getElementById(`cjSN_${ci}_${si}`);
+      const qtEl=document.getElementById(`cjQT_${ci}_${si}`);
+      if (snEl) { s.size=snEl.value.trim(); s.name=s.size; }
+      if (qtEl) s.plannedQty=parseInt(qtEl.value)||0;
+    });
+  });
+}
+
 function cjReset() {
-  _cjState={style:'',styleLabel:'',jobDisplayId:'',modelNo:'',fgItemId:'',fgUnit:'PCS',colours:[]};
+  const mode=_cjState.mode||'fg';
+  _cjState={mode,style:'',styleLabel:'',jobDisplayId:'',modelNo:'',manualModelName:'',fgItemId:'',fgUnit:'PCS',colours:[]};
   document.getElementById('cjStyle').value='';
-  document.getElementById('cjModelNo').value='';
+  const fgSel=document.getElementById('cjModelNo'); if(fgSel) fgSel.value='';
+  const mmEl=document.getElementById('cjManualModelInput'); if(mmEl) mmEl.value='';
+  const mmUnitEl=document.getElementById('cjManualUnit'); if(mmUnitEl) mmUnitEl.value='PCS';
   document.getElementById('cjJobIdDisplay').textContent='Select style first…';
-  cjRenderColours();
+  cjSetMode(mode);
 }
 
 // Build preview modal and open it
 function cjShowPreview() {
-  cjCollect();
-  if (!_cjState.style)    return toast('Please select a product style.','error');
-  if (!_cjState.fgItemId) return toast('Please select an FG item (Model No.).','error');
+  if (_cjState.mode==='manual') {
+    cjCollectManual();
+    // Sync manual model name from input
+    const mmEl=document.getElementById('cjManualModelInput');
+    if (mmEl) _cjState.manualModelName=mmEl.value.trim();
+    const mmUnitEl=document.getElementById('cjManualUnit');
+    if (mmUnitEl) _cjState.fgUnit=mmUnitEl.value||'PCS';
+    _cjState.modelNo=_cjState.manualModelName||'Manual Job';
+  } else {
+    cjCollect();
+  }
+  if (!_cjState.style) return toast('Please select a product style.','error');
+  if (_cjState.mode==='fg'&&!_cjState.fgItemId) return toast('Please select an FG item (Model No.).','error');
+  if (_cjState.mode==='manual'&&!_cjState.manualModelName) return toast('Please enter a Model No. / Article name.','error');
   // Build selected colours
-  const selColours=_cjState.colours.map(col=>({
-    ...col, sizes:col.sizes.filter(s=>s.selected&&s.plannedQty>0)
-  })).filter(col=>col.sizes.length>0);
+  const selColours=_cjState.mode==='manual'
+    ? _cjState.colours.map(col=>({...col,sizes:(col.sizes||[]).filter(s=>s.size&&s.plannedQty>0)})).filter(col=>col.sizes.length>0)
+    : _cjState.colours.map(col=>({...col,sizes:col.sizes.filter(s=>s.selected&&s.plannedQty>0)})).filter(col=>col.sizes.length>0);
   if (!selColours.length) return toast('Please select at least one colour/size and enter a planned qty.','error');
   for (const c of selColours) {
     for (const s of c.sizes) {
@@ -6025,17 +6344,27 @@ function cjShowPreview() {
 
 // Final Job creation — commits counter and saves job
 function cjFinalCreate() {
-  cjCollect();
+  const isManual=_cjState.mode==='manual';
+  if (isManual) cjCollectManual(); else cjCollect();
   const isAdmin=session.role==='admin';
-  // Build only selected colour/size combinations
+  // Build only selected / valid colour/size combinations
   const finalColours=[];
-  _cjState.colours.forEach(col=>{
-    const selSizes=col.sizes.filter(s=>s.selected&&s.plannedQty>0).map(s=>({
-      id:uid(), size:s.size, plannedQty:s.plannedQty, variantId:s.variantId
-    }));
-    if (selSizes.length) finalColours.push({id:uid(),name:col.name,sizes:selSizes});
-  });
-  if (!finalColours.length) { toast('No sizes selected with qty. Cannot create job.','error'); return; }
+  if (isManual) {
+    _cjState.colours.forEach(col=>{
+      const selSizes=(col.sizes||[]).filter(s=>s.size&&s.plannedQty>0).map(s=>({
+        id:uid(), size:s.size, name:s.size, plannedQty:s.plannedQty
+      }));
+      if (selSizes.length&&col.name) finalColours.push({id:uid(),name:col.name,sizes:selSizes});
+    });
+  } else {
+    _cjState.colours.forEach(col=>{
+      const selSizes=col.sizes.filter(s=>s.selected&&s.plannedQty>0).map(s=>({
+        id:uid(), size:s.size, plannedQty:s.plannedQty, variantId:s.variantId
+      }));
+      if (selSizes.length) finalColours.push({id:uid(),name:col.name,sizes:selSizes});
+    });
+  }
+  if (!finalColours.length) { toast('No valid colour/size entries with quantity. Cannot create job.','error'); return; }
   // Commit global counter
   const newCount=(parseInt(DB.jobCounter())||0)+1;
   DB.save(K.jobCounter, newCount);
@@ -6044,7 +6373,9 @@ function cjFinalCreate() {
   const jobObj={
     id:uid(), jobDisplayId:finalJobDisplayId, jobName:finalJobDisplayId,
     style:_cjState.style, styleLabel:_cjState.styleLabel,
-    modelNo:_cjState.modelNo, fgItemId:_cjState.fgItemId, unit:_cjState.fgUnit,
+    modelNo:_cjState.modelNo||_cjState.manualModelName||'Manual Job',
+    fgItemId:isManual?null:_cjState.fgItemId,
+    unit:_cjState.fgUnit, isManual,
     colours:finalColours,
     totalPlannedQty:totalQty, isActive:true,
     source:isAdmin?'admin_direct':'approved_request',
@@ -6055,7 +6386,7 @@ function cjFinalCreate() {
     const jobs=DB.jobs(); jobs.push(jobObj); DB.save(K.jobs,jobs);
     if (typeof syncToFirestore==='function') syncToFirestore(K.jobs,jobs);
     toast(`Job ${finalJobDisplayId} created successfully!`,'success');
-    setTimeout(() => _autoBookStockForJob(jobObj), 200);
+    if (!isManual) setTimeout(() => _autoBookStockForJob(jobObj), 200);
   } else {
     const reqs=DB.jobRequests(); reqs.push({...jobObj,status:'pending',reviewedBy:null,reviewedAt:null,adminRemark:null}); DB.save(K.jobRequests,reqs);
     toast(`Job request submitted for Admin approval.`,'success');
@@ -6192,7 +6523,7 @@ function renderWstMaster() {
 
 function openAddWst() { document.getElementById('newWstName').value=''; document.getElementById('newWstCode').value=''; openModal('modalAddWst'); }
 function adminAddWst() {
-  const name=document.getElementById('newWstName').value.trim(), code=document.getElementById('newWstCode').value.trim();
+  const name=_normStr(document.getElementById('newWstName').value), code=(document.getElementById('newWstCode').value||'').trim().toUpperCase();
   if (!name) return toast('Enter a workstation name.','error');
   const wsts=DB.workstations();
   if (wsts.find(w=>w.name.toLowerCase()===name.toLowerCase())) return toast('Workstation already exists.','error');
@@ -6214,7 +6545,7 @@ function openEditWst(id) {
   openModal('modalEditWst');
 }
 function saveEditWst() {
-  const name=document.getElementById('editWstName').value.trim();
+  const name=_normStr(document.getElementById('editWstName').value);
   const code=document.getElementById('editWstCode').value.trim();
   if (!name) return toast('Enter a workstation name.','error');
   const wsts=DB.workstations();
@@ -6252,7 +6583,7 @@ function openAddOp() {
   document.getElementById('newOpName').value=''; openModal('modalAddOp');
 }
 function adminAddOp() {
-  const wstId=document.getElementById('newOpWst').value, name=document.getElementById('newOpName').value.trim();
+  const wstId=document.getElementById('newOpWst').value, name=_normStr(document.getElementById('newOpName').value);
   if (!wstId) return toast('Select a workstation.','error');
   if (!name) return toast('Enter an operation name.','error');
   const wst=DB.workstations().find(w=>w.id===wstId); if(!wst) return;
@@ -6604,6 +6935,10 @@ function toast(msg,type='success') {
 function uid()        { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function now()        { return new Date().toISOString(); }
 function esc(s)       { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Uppercase normaliser — applied to all name/label fields on save to prevent duplicates
+function _normStr(s){ return (s||'').trim().replace(/\s+/g,' ').toUpperCase(); }
+// Lowercase normaliser — for codes, usernames
+function _normLow(s){ return (s||'').trim().toLowerCase(); }
 
 // ════════════════════════════════════════════════════════════════════════════
 // EMPLOYEE MASTER
@@ -6811,8 +7146,8 @@ function openEditEmp(id) {
 function _collectEmpForm() {
   const salaryType=document.getElementById('empSalaryType').value;
   return {
-    name:document.getElementById('empName').value.trim(),
-    address:document.getElementById('empAddress').value.trim(),
+    name:_normStr(document.getElementById('empName').value),
+    address:_normStr(document.getElementById('empAddress').value),
     aadhar:document.getElementById('empAadhar').value.trim(),
     phone:document.getElementById('empPhone').value.trim(),
     designation:document.getElementById('empDesig').value,
@@ -8122,8 +8457,8 @@ function _renderWIPDetail(jobId) {
   const qcEntries=DB.qcEntries().filter(q=>q.jobId===jobId);
   const wsts=routing?.workstations||[];
 
-  // Build a map: wstId → opId → colourId → sizeId → qty
-  const doneMap={}; // key: `${wstId}_${opId}_${colourId}_${sizeId}` → qty
+  // Build done map
+  const doneMap={};
   prodEntries.forEach(e=>{
     (e.operations||[]).forEach(op=>{
       const k=`${op.wstId}_${op.opId}_${e.colourId}_${e.sizeId}`;
@@ -8131,7 +8466,7 @@ function _renderWIPDetail(jobId) {
     });
   });
 
-  // QC map: colourId → sizeId → {pass, alter, reject}
+  // QC map
   const qcMap={};
   qcEntries.forEach(q=>{
     const k=`${q.colourId}_${q.sizeId}`;
@@ -8139,16 +8474,33 @@ function _renderWIPDetail(jobId) {
     qcMap[k].pass+=q.pass; qcMap[k].alter+=q.alter; qcMap[k].reject+=q.reject;
   });
 
-  // All colours+sizes for this job
+  // All colours+sizes
   const colourSizes=[];
   (job.colours||[]).forEach(c=>(c.sizes||[]).forEach(s=>colourSizes.push({cId:c.id,cName:c.name,sId:s.id,sName:s.size||s.name||s.id,planned:s.plannedQty||s.qty||0})));
+
+  // Pre-compute eligibility for every colour×size combo
+  const eligMap={};
+  window._wipPills=[];
+  colourSizes.forEach(cs=>{
+    eligMap[`${cs.cId}_${cs.sId}`]=_buildRoutingSteps(jobId,cs.cId,cs.sId,job)||[];
+  });
+
+  const hasAnyElig=colourSizes.some(cs=>(eligMap[`${cs.cId}_${cs.sId}`]||[]).some(s=>s.isEligible));
 
   let html=`<div class="card" style="margin-top:0;border-top-left-radius:0;border-top-right-radius:0;border-top:2px solid #3b82f6;">
     <div class="card-header" style="background:#eff6ff;">
       <h3 style="color:#1d4ed8;">🔍 WIP Detail — ${esc(job.jobDisplayId||job.jobName)} &nbsp;<span class="text-muted" style="font-size:.85rem;">${esc(job.modelNo||'')} · ${esc(job.styleLabel||'')}</span></h3>
       <button class="btn btn-ghost btn-sm" onclick="wipToggleDetail('${jobId}')">✕ Close</button>
-    </div>
-    <div class="card-body" style="padding:0;">`;
+    </div>`;
+
+  if (hasAnyElig) {
+    html+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:#fefce8;border-bottom:1px solid #fde047;font-size:.8rem;color:#713f12;">
+      <span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#3b82f6;box-shadow:0 0 0 3px #93c5fd;animation:pulse 1.4s infinite;flex-shrink:0;"></span>
+      <span><strong>Blinking tiles</strong> are eligible for entry — click any blinking tile to add production data.</span>
+    </div>`;
+  }
+
+  html+=`<div class="card-body" style="padding:0;">`;
 
   if (!wsts.length) {
     html+='<div class="text-muted" style="padding:16px;">No routing assigned for this job.</div>';
@@ -8158,14 +8510,13 @@ function _renderWIPDetail(jobId) {
         <div style="font-weight:700;font-size:.95rem;margin-bottom:8px;color:#1e40af;">
           ${wi+1}. ${esc(w.wstName)}
         </div>`;
-      (w.operations||[]).forEach((op,oi)=>{
-        // aggregate across all colours/sizes for this op
+      (w.operations||[]).forEach(op=>{
+        const opId=op.opId||op.id;
         const totalDone=colourSizes.reduce((s,cs)=>{
-          const k=`${w.wstId}_${op.opId}_${cs.cId}_${cs.sId}`;
+          const k=`${w.wstId}_${opId}_${cs.cId}_${cs.sId}`;
           return s+(doneMap[k]||0);
         },0);
         const totalPlanned=colourSizes.reduce((s,cs)=>s+cs.planned,0);
-        const pending=Math.max(0,totalPlanned-totalDone);
         const pct=totalPlanned>0?Math.round((totalDone/totalPlanned)*100):0;
         const opStatusBg=pct>=100?'#dcfce7':pct>0?'#dbeafe':'#f3f4f6';
         const opStatusColor=pct>=100?'#16a34a':pct>0?'#1d4ed8':'#9ca3af';
@@ -8181,16 +8532,24 @@ function _renderWIPDetail(jobId) {
           <div style="height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;margin-bottom:8px;">
             <div style="height:100%;width:${pct}%;background:${pct>=100?'#22c55e':pct>0?'#3b82f6':'#e5e7eb'};border-radius:3px;transition:width .4s;"></div>
           </div>
-          <!-- Colour × Size breakdown -->
           <div style="display:flex;flex-wrap:wrap;gap:4px;">
             ${colourSizes.map(cs=>{
-              const k=`${w.wstId}_${op.opId}_${cs.cId}_${cs.sId}`;
+              const k=`${w.wstId}_${opId}_${cs.cId}_${cs.sId}`;
               const done=doneMap[k]||0;
               const pend=Math.max(0,cs.planned-done);
+              const steps=eligMap[`${cs.cId}_${cs.sId}`]||[];
+              const step=steps.find(s=>s.wstId===w.wstId&&s.opId===opId);
+              const isElig=step?.isEligible||false;
+              const remaining=step?.remaining||0;
+              const pillIdx=window._wipPills.length;
+              window._wipPills.push({jobId,colourId:cs.cId,colourName:cs.cName,sizeId:cs.sId,sizeName:cs.sName,wstId:w.wstId,wstName:w.wstName,opId,opName:op.opName,remaining});
               const bg=done>=cs.planned&&cs.planned>0?'#dcfce7':done>0?'#dbeafe':'#f3f4f6';
-              return `<div style="padding:4px 8px;border-radius:6px;background:${bg};font-size:.75rem;border:1px solid #e5e7eb;">
+              const eligStyle=isElig?'animation:pulse 1.4s infinite;box-shadow:0 0 0 3px #93c5fd;border:2px solid #3b82f6;cursor:pointer;':'border:1px solid #e5e7eb;';
+              const clickAttr=isElig?`onclick="wipOpenQuickEntry(${pillIdx})" role="button" tabindex="0"`:'';
+              return `<div ${clickAttr} style="padding:4px 8px;border-radius:6px;background:${bg};font-size:.75rem;${eligStyle}transition:box-shadow .2s;">
                 <span style="font-weight:600;">${esc(cs.cName)} / ${esc(cs.sName)}</span><br>
                 <span style="color:#16a34a;">${done}✓</span> <span style="color:#dc2626;">${pend} pend.</span><span style="color:#aaa;">/${cs.planned}</span>
+                ${isElig?`<br><span style="color:#1d4ed8;font-size:.68rem;font-weight:700;">👆 Enter (${remaining} avail.)</span>`:''}
               </div>`;
             }).join('')}
           </div>
@@ -8221,10 +8580,115 @@ function _renderWIPDetail(jobId) {
       </div>`;
     }
   }
-  html+='</div></div>';
+  html+=`</div><div id="wipQuickEntryPanel" style="display:none;padding:0 16px 16px;"></div></div>`;
   document.getElementById('wipDetail').innerHTML=html;
   document.getElementById('wipDetail').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
+
+function wipOpenQuickEntry(pillIdx) {
+  const s=window._wipPills&&window._wipPills[pillIdx];
+  if (!s) return;
+  window._wipQEState=s;
+  const emps=DB.employees().filter(e=>!e.isDeleted);
+  const empOpts=emps.map(e=>`<option value="${e.id}" data-name="${esc(e.name||e.id)}" data-displayid="${esc(e.displayId||e.empId||'')}" data-desig="${esc(e.designation||'')}">${esc(e.name||e.id)}${e.empId?' ('+e.empId+')':''}</option>`).join('');
+  const panel=document.getElementById('wipQuickEntryPanel');
+  if (!panel) return;
+  panel.style.display='block';
+  panel.innerHTML=`
+    <div style="background:#eff6ff;border:2px solid #3b82f6;border-radius:10px;padding:16px;margin-top:4px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+        <div>
+          <div style="font-weight:700;color:#1d4ed8;font-size:.95rem;">✏️ Quick Entry</div>
+          <div style="font-size:.82rem;color:#374151;margin-top:2px;">
+            <strong>${esc(s.opName)}</strong> &nbsp;·&nbsp; ${esc(s.colourName)} / ${esc(s.sizeName)}
+            &nbsp;·&nbsp; <span style="color:#555;">${esc(s.wstName)}</span>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="wipCloseQuickEntry()" style="color:#6b7280;">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:.78rem;font-weight:600;color:#374151;display:block;margin-bottom:3px;">Date</label>
+          <input type="date" id="wipQEDate" value="${todayDate()}" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;">
+        </div>
+        <div>
+          <label style="font-size:.78rem;font-weight:600;color:#374151;display:block;margin-bottom:3px;">Employee</label>
+          <select id="wipQEEmp" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;">
+            <option value="">— select —</option>
+            ${empOpts}
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:.78rem;font-weight:600;color:#374151;display:block;margin-bottom:3px;">
+          Quantity <span style="color:#3b82f6;font-weight:400;">(max allowed: ${s.remaining})</span>
+        </label>
+        <input type="number" id="wipQEQty" min="1" max="${s.remaining}" placeholder="Enter qty (1–${s.remaining})"
+          style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="wipSaveQuickEntry()" style="flex:1;">💾 Save Entry</button>
+        <button class="btn btn-ghost" onclick="wipCloseQuickEntry()">Cancel</button>
+      </div>
+    </div>`;
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function wipCloseQuickEntry() {
+  window._wipQEState=null;
+  const p=document.getElementById('wipQuickEntryPanel');
+  if (p){p.style.display='none';p.innerHTML='';}
+}
+
+function wipSaveQuickEntry() {
+  const s=window._wipQEState;
+  if (!s) return;
+  const date=document.getElementById('wipQEDate')?.value||'';
+  const empSel=document.getElementById('wipQEEmp');
+  const empId=empSel?.value||'';
+  const empOpt=empSel?.options[empSel.selectedIndex];
+  const empName=empOpt?.dataset?.name||empOpt?.text||'';
+  const empDisplayId=empOpt?.dataset?.displayid||'';
+  const designation=empOpt?.dataset?.desig||'';
+  const qty=parseInt(document.getElementById('wipQEQty')?.value||'0');
+  if (!date) return toast('Please select a date.','error');
+  if (!empId) return toast('Please select an employee.','error');
+  if (!qty||qty<=0) return toast('Please enter a quantity greater than 0.','error');
+  if (qty>s.remaining) return toast(`Quantity cannot exceed ${s.remaining} (routing limit).`,'error');
+  const job=DB.jobs().find(j=>j.id===s.jobId);
+  if (!job) return toast('Job not found.','error');
+  const steps=_buildRoutingSteps(s.jobId,s.colourId,s.sizeId,job)||[];
+  const step=steps.find(st=>st.wstId===s.wstId&&st.opId===s.opId);
+  if (!step) return toast('Operation not found in routing.','error');
+  if (!step.isEligible&&step.remaining<=0) return toast('This operation is no longer eligible.','error');
+  if (qty>step.remaining) return toast(`Quantity ${qty} exceeds current available ${step.remaining}.`,'error');
+  const opPayload={id:uid(),wstId:s.wstId,wstName:s.wstName,opId:s.opId,opName:s.opName,quantity:qty,unit:job.unit||'PCS'};
+  const entries=DB.prodEntries();
+  const ex=entries.find(e=>e.date===date&&e.empId===empId&&e.jobId===s.jobId&&e.colourId===s.colourId&&e.sizeId===s.sizeId&&!e.side);
+  if (ex) {
+    const existOp=ex.operations.find(o=>o.wstId===s.wstId&&o.opId===s.opId);
+    if (existOp) existOp.quantity+=qty;
+    else ex.operations.push(opPayload);
+    ex.lastEditedBy=session.userId; ex.lastEditedByName=session.username; ex.lastEditedAt=now();
+    DB.save(K.prodEntries,entries); toast('Entry updated.','success');
+  } else {
+    entries.push({
+      id:uid(), date,
+      empId, empDisplayId, empName, designation,
+      jobId:s.jobId, jobDisplayId:job.jobDisplayId||job.jobName, modelNo:job.modelNo||'', styleLabel:job.styleLabel||'',
+      colourId:s.colourId, colourName:s.colourName, sizeId:s.sizeId, sizeName:s.sizeName,
+      side:null, unit:job.unit||'PCS',
+      operations:[opPayload],
+      enteredBy:session.userId, enteredByName:session.username, enteredAt:now(),
+      lastEditedBy:null, lastEditedByName:null, lastEditedAt:null,
+    });
+    DB.save(K.prodEntries,entries); toast('Production entry saved!','success');
+  }
+  wipCloseQuickEntry();
+  renderWIP();
+  _renderWIPDetail(s.jobId);
+}
+
 function todayDate()  { return new Date().toISOString().split('T')[0]; }
 function capitalize(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):''; }
 function formatDateDisplay(s) {
@@ -9674,6 +10138,7 @@ function renderSidebar() {
     { id:'production',label:'Production', icon:'⚙️', show: true, tabs: getModuleTabs('production') },
     { id:'store',     label:'Store',      icon:'🏪', show: getModuleTabs('store').length>0, tabs: getModuleTabs('store') },
     { id:'sampling',  label:'Sampling',   icon:'🎨', show: getModuleTabs('sampling').length>0, tabs: getModuleTabs('sampling') },
+    { id:'crm',       label:'CRM',        icon:'🛒', show: isAdmin || getModuleTabs('crm').length>0, tabs: getModuleTabs('crm') },
     { id:'masters',   label:'Masters',    icon:'🗃️', show: isAdmin || getModuleTabs('masters').length>0, tabs: getModuleTabs('masters') },
     { id:'settings',  label:'Settings',   icon:'⚙️', show: isAdmin },
   ];
@@ -10370,7 +10835,7 @@ function payCtCatAddOpRow(btnOrList, existing) {
 }
 
 function savePayContractor() {
-  const name = document.getElementById('payCtName').value.trim();
+  const name = _normStr(document.getElementById('payCtName').value);
   if (!name) return toast('Enter contractor name.','error');
 
   const blocks = document.querySelectorAll('#payCtCategoryRates .payCtCatBlock');
@@ -10847,7 +11312,7 @@ async function init() {
 
     // Find matching ERP profile (Firebase email → username → profile)
     const username = _fromAuthEmail(firebaseUser.email);
-    const profile = DB.users().find(x => x.username === username && x.isActive);
+    const profile = DB.users().find(x => x.username.toLowerCase() === username.toLowerCase() && x.isActive);
 
     if (!profile) {
       // Either orphaned Firebase Auth account, OR Firestore sync failed (fresh device / rules blocked)
@@ -11157,7 +11622,7 @@ async function doResetModuleData(moduleKey) {
   // Triple confirmation
   const pw = prompt(`⚠️ DANGER ZONE\n\nYou are about to permanently delete: ${label}\n\nThis action CANNOT be undone.\n\nEnter your admin password to proceed:`);
   if (pw === null) return toast('Reset cancelled.', 'info');
-  const adminUser = DB.users().find(u => u.username===session.username && u.role==='admin');
+  const adminUser = DB.users().find(u => u.username.toLowerCase()===(session.username||'').toLowerCase() && u.role==='admin');
   const pwHash = await hashPwd(pw);
   if (!adminUser || adminUser.passwordHash !== pwHash) return toast('Incorrect password. Reset cancelled.', 'error');
   const confirmed = confirm(`FINAL WARNING\n\nDeleting: ${label}\n\nAn emergency backup will be downloaded first.\n\nClick OK to proceed.`);
@@ -12097,7 +12562,7 @@ function _imGoPreview(){
   _imSyncFormData();
   const d=_storeFormData;
   const type=d.itemType||'', isFG=type==='FG', isSFG=type==='SFG';
-  const name=(d.itemName||'').trim(), code=(d.itemCode||'').trim(), unit=d.unit||'';
+  const name=_normStr(d.itemName), code=(d.itemCode||'').trim().toUpperCase(), unit=d.unit||'';
   const catId=d.categoryId||'', subId=d.subCategoryId||'';
 
   if(!type)  {alert('Select Item Type.');return;}
@@ -18070,6 +18535,2476 @@ function fulfillRequisition(mrId, pendingCount) {
 // ── end Material Requisition module ───────────────────────────────────────────
 
 // ── end Sampling module ───────────────────────────────────────────────────────
+
+// ════════════════════════════════════════════════════════════════════════════
+// CRM MODULE  v2 — item images, NIIC print, dropdown MRP auto-fill
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── NIIC Logo (for print) ─────────────────────────────────────────────────────
+const _NIIC_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 232 152" width="90" height="auto">
+  <path fill="#253358" d="M5,62 A35.5,35.5,0,0,1,76,62 L76,121 L56,121 L56,62 A15.5,15.5,0,0,0,25,62 L25,121 L5,121 Z"/>
+  <circle cx="92" cy="37" r="10" fill="#BC332B"/>
+  <rect x="82" y="53" width="20" height="68" rx="10" fill="#BC332B"/>
+  <circle cx="118" cy="37" r="10" fill="#BC332B"/>
+  <rect x="108" y="53" width="20" height="68" rx="10" fill="#BC332B"/>
+  <path fill="#253358" d="M226.6,68.1 A47,47,0,1,0,226.6,79.7 L206.4,79.7 A27,27,0,1,1,206.4,68.1 Z"/>
+  <text x="116" y="147" text-anchor="middle" font-family="'Segoe UI',Arial,sans-serif" font-weight="800" font-size="11" fill="#253358" letter-spacing="1.5">NIVANSH INDIA INFANT CARE</text>
+</svg>`;
+
+// ── Constants ────────────────────────────────────────────────────────────────
+const CRM_CAPACITY_PER_DAY = 600; // manufacturing capacity in pairs per day
+
+// ── ORDER BOOKING (order_booking right — standalone form) ─────────────────────
+let _obItems      = [{itemName:'',qty:''}];  // booking form item rows
+let _obEditId     = null;                    // null = new order; string = editing existing order id
+let _obCustomer   = '';                      // customer name field state (survives re-renders)
+let _obStartDate  = '';                      // start date field state
+let _obTargetDate = '';                      // target date field state
+
+function openOrderBookingView(){
+  showView('orderBookingView');
+  renderOrderBookingView();
+}
+
+function obStartEdit(orderId){
+  const order = (DB.crmOrders()||[]).find(o=>o.id===orderId);
+  if(!order) return;
+  _obEditId     = orderId;
+  _obCustomer   = order.customerName||'';
+  _obStartDate  = order.startDate||'';
+  _obTargetDate = order.targetDate||'';
+  _obItems      = (order.items||[]).map(i=>({itemName:i.itemName||'', qty:i.qty||''}));
+  if(!_obItems.length) _obItems = [{itemName:'',qty:''}];
+  renderOrderBookingView();
+  document.getElementById('obFormCard')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function obCancelEdit(){
+  _obEditId     = null;
+  _obCustomer   = '';
+  _obStartDate  = '';
+  _obTargetDate = '';
+  _obItems      = [{itemName:'',qty:''}];
+  renderOrderBookingView();
+}
+
+function renderOrderBookingView(){
+  const el = document.getElementById('orderBookingContent');
+  if (!el) return;
+  const myOrders = (DB.crmOrders()||[]).filter(o=>o.createdBy===session?.userId).reverse();
+  const isEdit   = !!_obEditId;
+  const editOrder= isEdit ? myOrders.find(o=>o.id===_obEditId) : null;
+
+  const rows = _obItems.map((it,i)=>`
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;" id="obRow_${i}">
+      <input type="text" placeholder="Item / product name…" value="${(it.itemName||'').replace(/"/g,'&quot;')}"
+        oninput="_obItems[${i}].itemName=this.value"
+        style="flex:1;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.95rem;">
+      <input type="number" placeholder="Qty" min="1" value="${it.qty||''}"
+        oninput="_obItems[${i}].qty=+this.value"
+        style="width:90px;padding:10px 8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.95rem;text-align:center;">
+      ${_obItems.length>1
+        ?`<button onclick="_obItems.splice(${i},1);renderOrderBookingView()"
+            style="background:none;border:none;color:#ef4444;font-size:1.3rem;cursor:pointer;padding:4px 6px;">✕</button>`
+        :'<div style="width:32px;"></div>'}
+    </div>`).join('');
+
+  const statusBadge = o => {
+    const st = _crmOrderStatus(o);
+    const map = {pending:'#f59e0b',partial:'#3b82f6',completed:'#22c55e'};
+    const lbl = {pending:'Pending',partial:'Partial',completed:'Completed'};
+    return `<span style="background:${map[st]||'#94a3b8'};color:#fff;padding:2px 9px;border-radius:10px;font-size:.75rem;font-weight:700;">${lbl[st]||st}</span>`;
+  };
+
+  const ordRows = myOrders.length===0
+    ?`<tr><td colspan="6" style="padding:24px;text-align:center;color:#9ca3af;">No orders yet — submit your first order above.</td></tr>`
+    :myOrders.map(o=>{
+        const totalQty=(o.items||[]).reduce((s,i)=>s+(i.qty||0),0);
+        const isBeingEdited = o.id===_obEditId;
+        return `<tr style="border-bottom:1px solid #f1f5f9;${isBeingEdited?'background:#eff6ff;':''}">
+          <td style="padding:10px 12px;font-weight:600;color:#2563eb;">${o.orderNo}</td>
+          <td style="padding:10px 12px;">${o.date}</td>
+          <td style="padding:10px 12px;">${o.customerName}</td>
+          <td style="padding:10px 12px;text-align:center;">${totalQty}</td>
+          <td style="padding:10px 12px;">${statusBadge(o)}</td>
+          <td style="padding:10px 12px;">
+            ${isBeingEdited
+              ?`<button onclick="obCancelEdit()" style="background:none;border:1px solid #d1d5db;padding:4px 10px;border-radius:6px;font-size:.78rem;cursor:pointer;color:#6b7280;">Cancel</button>`
+              :`<button onclick="obStartEdit('${o.id}')" style="background:none;border:1px solid #2563eb;padding:4px 10px;border-radius:6px;font-size:.78rem;cursor:pointer;color:#2563eb;">Edit</button>`
+            }
+          </td>
+        </tr>`;
+      }).join('');
+
+  el.innerHTML = `
+    <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <div>
+          <div style="font-size:1.3rem;font-weight:800;color:#1e293b;">📝 ${isEdit?'Edit Order':'Book an Order'}</div>
+          <div style="font-size:.82rem;color:#6b7280;margin-top:2px;">Logged in as <strong>${session.username}</strong>${isEdit&&editOrder?` · Editing <strong>${editOrder.orderNo}</strong>`:''}</div>
+        </div>
+        <button onclick="doLogout()" style="background:none;border:1px solid #d1d5db;padding:6px 12px;border-radius:7px;font-size:.82rem;cursor:pointer;color:#6b7280;">Logout</button>
+      </div>
+
+      <!-- Form card -->
+      <div id="obFormCard" style="background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.07);padding:20px;margin-bottom:24px;${isEdit?'border:2px solid #2563eb;':''}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-weight:700;color:#374151;font-size:.95rem;">${isEdit?`✏️ Editing ${editOrder?.orderNo||'Order'}`:'New Order'}</div>
+          ${isEdit?`<button onclick="obCancelEdit()" style="background:none;border:none;color:#6b7280;font-size:.82rem;cursor:pointer;text-decoration:underline;">Cancel edit</button>`:''}
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+          <div style="grid-column:1/-1;">
+            <label style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Customer Name ✱</label>
+            <input type="text" id="obCustomer" placeholder="Customer / company name…" list="obCustomerList"
+              value="${(_obCustomer||'').replace(/"/g,'&quot;')}"
+              oninput="_obCustomer=this.value"
+              style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.95rem;">
+            <datalist id="obCustomerList">
+              ${[...new Set((DB.crmOrders()||[]).map(o=>o.customerName))].map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('')}
+            </datalist>
+          </div>
+          <div style="grid-column:1/-1;">
+            <label style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:5px;">ETD (Target Delivery Date)</label>
+            <input type="date" id="obTargetDate"
+              value="${_obTargetDate||''}"
+              oninput="_obTargetDate=this.value"
+              style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.95rem;">
+          </div>
+        </div>
+
+        <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:8px;">Items ✱</div>
+        <div id="obItemRows">${rows}</div>
+        <button onclick="_obItems.push({itemName:'',qty:''});renderOrderBookingView()"
+          style="background:#f8fafc;border:1.5px dashed #d1d5db;width:100%;padding:9px;border-radius:8px;font-size:.85rem;color:#6b7280;cursor:pointer;margin-top:4px;margin-bottom:16px;">
+          + Add another item
+        </button>
+
+        <button onclick="submitOrderBooking()"
+          style="width:100%;padding:13px;background:${isEdit?'#059669':'#2563eb'};color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:.3px;">
+          ${isEdit?'💾 Save Changes':'Submit Order'}
+        </button>
+      </div>
+
+      <!-- My orders history -->
+      <div style="background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.07);padding:20px;">
+        <div style="font-weight:700;color:#374151;margin-bottom:12px;font-size:.95rem;">My Submitted Orders</div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+            <thead><tr style="background:#f8fafc;">
+              <th style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:left;">Order No</th>
+              <th style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:left;">Date</th>
+              <th style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:left;">Customer</th>
+              <th style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">Total Qty</th>
+              <th style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:left;">Status</th>
+              <th style="padding:8px 12px;border-bottom:1px solid #e5e7eb;"></th>
+            </tr></thead>
+            <tbody>${ordRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+function submitOrderBooking(){
+  // read header values from state vars (oninput-maintained)
+  const customer = _normStr(_obCustomer||'');
+  if (!customer) return toast('Please enter a customer name.','error');
+  const items = _obItems.filter(it=>it.itemName && +it.qty>0).map(it=>({...it,itemName:_normStr(it.itemName)}));
+  if (!items.length) return toast('Please add at least one item with a quantity.','error');
+  const targetDate = _obTargetDate||'';
+  const startDate  = _obStartDate||'';
+
+  const orders = DB.crmOrders()||[];
+
+  if(_obEditId){
+    // UPDATE existing order
+    const idx = orders.findIndex(o=>o.id===_obEditId);
+    if(idx===-1) return toast('Order not found.','error');
+    orders[idx].customerName = customer;
+    orders[idx].startDate    = startDate;
+    orders[idx].targetDate   = targetDate;
+    orders[idx].items        = items.map(it=>({itemId:'', itemName:it.itemName, qty:+it.qty, mrp: orders[idx].items?.find(x=>x.itemName===it.itemName)?.mrp||0}));
+    orders[idx].updatedAt    = new Date().toISOString();
+    DB.save(K.crmOrders, orders);
+    const orderNo = orders[idx].orderNo;
+    _obEditId = null; _obCustomer=''; _obStartDate=''; _obTargetDate='';
+    _obItems  = [{itemName:'',qty:''}];
+    toast(`Order ${orderNo} updated!`,'success');
+  } else {
+    // CREATE new order
+    const order = {
+      id: _crmUID('crmo_'),
+      orderNo: _crmNextOrderNo(),
+      date: todayDate(),
+      customerName: customer,
+      startDate,
+      targetDate,
+      completionDate: '',
+      items: items.map(it=>({itemId:'', itemName:it.itemName, qty:+it.qty, mrp:0})),
+      createdBy: session.userId,
+      createdAt: new Date().toISOString(),
+    };
+    orders.push(order);
+    DB.save(K.crmOrders, orders);
+    _obCustomer=''; _obStartDate=''; _obTargetDate='';
+    _obItems = [{itemName:'',qty:''}];
+    toast(`Order ${order.orderNo} submitted!`,'success');
+  }
+  renderOrderBookingView();
+}
+
+// ── State ────────────────────────────────────────────────────────────────────
+let _crmOrdMode    = 'list';   // 'list' | 'create' | 'view'
+let _crmOrdViewId  = '';
+let _crmOrdEditId  = null;     // null = new order; string = editing existing order id
+let _crmOrdItems   = [{itemId:'',itemName:'',qty:'',mrp:'',photo:''}];
+let _crmOrdSearch  = '';
+let _crmOrdStatusF = '';
+let _crmPlannerOpen = false;   // capacity planner panel toggle
+let _crmPlMode     = 'list';   // 'list' | 'create' | 'view' | 'boxes'
+let _crmPlOrderId  = '';
+let _crmPlPackItems = {};      // {itemId: dispatchQty} while creating PL
+let _crmPlExtraItems = [];     // [{itemName, qty}] manually added items
+let _crmPlViewId   = '';
+let _crmBxConfigs  = [];       // [{items:[{itemId,itemName,qty,maxQty}], count:1}]
+let _crmBxDraft    = [];       // boxes defined during PL creation (before confirm dispatch)
+let _crmBxReturnTo = 'view';   // 'create' | 'view' — where to return after box builder
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function _crmUID(pfx){ return pfx + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function _crmNextOrderNo(){
+  const orders = DB.crmOrders();
+  if(!orders.length) return 'ORD-001';
+  const nums = orders.map(o=>{ const m=(o.orderNo||'').match(/ORD-(\d+)/); return m?+m[1]:0; });
+  return 'ORD-' + String(Math.max(...nums)+1).padStart(3,'0');
+}
+
+function _crmNextPLNo(){
+  const pls = DB.crmPackingLists();
+  if(!pls.length) return 'PL-001';
+  const nums = pls.map(p=>{ const m=(p.plNo||'').match(/PL-(\d+)/); return m?+m[1]:0; });
+  return 'PL-' + String(Math.max(...nums)+1).padStart(3,'0');
+}
+
+function _crmGetAvailable(itemId){
+  const inward = (DB.crmFGStock()||[]).filter(e=>e.itemId===itemId).reduce((s,e)=>s+(e.qty||0),0);
+  const dispatched = (DB.crmPackingLists()||[]).filter(p=>p.status==='confirmed')
+    .flatMap(p=>p.items||[]).filter(i=>i.itemId===itemId).reduce((s,i)=>s+(i.qty||0),0);
+  return Math.max(0, inward-dispatched);
+}
+
+function _crmGetStockSummary(){
+  const map = {};
+  (DB.crmItems()||[]).forEach(it=>{ map[it.id]={itemId:it.id,itemName:it.name,inward:0,dispatched:0}; });
+  (DB.crmFGStock()||[]).forEach(e=>{
+    if(!map[e.itemId]) map[e.itemId]={itemId:e.itemId,itemName:e.itemName,inward:0,dispatched:0};
+    map[e.itemId].inward += (e.qty||0);
+  });
+  (DB.crmPackingLists()||[]).filter(p=>p.status==='confirmed').forEach(p=>(p.items||[]).forEach(i=>{
+    if(!map[i.itemId]) map[i.itemId]={itemId:i.itemId,itemName:i.itemName,inward:0,dispatched:0};
+    map[i.itemId].dispatched += (i.qty||0);
+  }));
+  return Object.values(map).map(r=>({...r,available:Math.max(0,r.inward-r.dispatched)})).filter(r=>r.inward>0);
+}
+
+function _crmOrderStatus(order){
+  if(!order.items||!order.items.length) return 'pending';
+  const pls = (DB.crmPackingLists()||[]).filter(p=>p.orderId===order.id&&p.status==='confirmed');
+  const dispMap = {};
+  pls.forEach(p=>(p.items||[]).forEach(i=>{ dispMap[i.itemId]=(dispMap[i.itemId]||0)+i.qty; }));
+  const totalOrdered    = order.items.reduce((s,i)=>s+(i.qty||0),0);
+  const totalDispatched = order.items.reduce((s,i)=>s+(dispMap[i.itemId]||0),0);
+  if(totalDispatched<=0)              return 'pending';
+  if(totalDispatched>=totalOrdered)   return 'completed';
+  return 'partial';
+}
+
+function _crmStatusBadge(status){
+  const cfg={
+    pending:   {bg:'#fef3c7',color:'#92400e',label:'⏳ Pending'},
+    partial:   {bg:'#dbeafe',color:'#1e40af',label:'📦 Partial'},
+    completed: {bg:'#d1fae5',color:'#065f46',label:'✅ Completed'},
+  };
+  const c=cfg[status]||cfg.pending;
+  return `<span style="background:${c.bg};color:${c.color};padding:2px 8px;border-radius:12px;font-size:.78rem;font-weight:600;">${c.label}</span>`;
+}
+
+function _crmCanEdit(){
+  return session.role==='admin' || ((DB.users()||[]).find(u=>u.id===session.userId)?.rights||[]).includes('crm_entry');
+}
+
+// ── Print helper ─────────────────────────────────────────────────────────────
+function _niicPrint(title, bodyHTML){
+  const w=window.open('','_blank','width=820,height=700');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1a1a1a;padding:20px;}
+.ph{display:flex;align-items:center;gap:18px;padding-bottom:14px;border-bottom:3px solid #253358;margin-bottom:16px;}
+.ph-info{flex:1;}
+.ph-info h1{font-size:18px;color:#253358;font-weight:800;letter-spacing:.5px;}
+.ph-info p{font-size:10px;color:#555;margin-top:2px;}
+.ph-badge{background:#253358;color:#fff;padding:5px 14px;border-radius:5px;font-size:14px;font-weight:700;}
+.meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:11px;}
+.meta-item span{color:#666;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{background:#f1f5f9;padding:8px 10px;border:1px solid #dde;text-align:left;font-weight:700;}
+td{padding:8px 10px;border:1px solid #eee;vertical-align:middle;}
+.tr{background:#f8fafc;font-weight:700;}
+img.ii{width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid #e5e7eb;}
+.img-ph{width:48px;height:48px;background:#f1f5f9;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:20px;border:1px solid #e5e7eb;}
+.footer{margin-top:18px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:10px;color:#999;display:flex;justify-content:space-between;}
+@media print{body{padding:10px;}button{display:none!important;}}
+</style></head><body>
+${bodyHTML}
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`);
+  w.document.close();
+}
+
+// ── Photo upload helpers ──────────────────────────────────────────────────────
+function crmPickItemPhoto(idx){
+  const inp=document.getElementById('crmPhotoInp_'+idx); if(inp) inp.click();
+}
+function crmLoadItemPhoto(idx,input){
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{ _crmOrdItems[idx].photo=e.target.result; renderCRMOrdersTab(); };
+  reader.readAsDataURL(file);
+}
+function _crmItemPhoto(itemId){
+  // In-memory cache is the primary source (photos are stripped from localStorage).
+  // Falls back to localStorage in case the cache isn't populated yet (edge case).
+  return (window._crmPhotoCache||{})[itemId]
+    || (DB.crmItems()||[]).find(i=>i.id===itemId)?.photo
+    || '';
+}
+function _crmImgTag(photo, size=40){
+  if(photo) return `<img src="${photo}" style="width:${size}px;height:${size}px;object-fit:cover;border-radius:4px;border:1px solid #e5e7eb;">`;
+  return `<div style="width:${size}px;height:${size}px;background:#f1f5f9;border-radius:4px;border:1px dashed #d1d5db;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size*.5)}px;">📦</div>`;
+}
+
+// ── ORDERS TAB ────────────────────────────────────────────────────────────────
+function renderCRMOrdersTab(){
+  const el=document.getElementById('tab-crm-orders'); if(!el) return;
+  if(_crmOrdMode==='create'){ el.innerHTML=_crmOrderCreateHTML(); return; }
+  if(_crmOrdMode==='view')  { el.innerHTML=_crmOrderViewHTML(_crmOrdViewId); return; }
+
+  let orders=[...(DB.crmOrders()||[])].reverse();
+  if(_crmOrdSearch) orders=orders.filter(o=>
+    (o.orderNo||'').toLowerCase().includes(_crmOrdSearch.toLowerCase())||
+    (o.customerName||'').toLowerCase().includes(_crmOrdSearch.toLowerCase()));
+  if(_crmOrdStatusF) orders=orders.filter(o=>_crmOrderStatus(o)===_crmOrdStatusF);
+
+  el.innerHTML=`<div style="padding:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <h3 style="margin:0;font-size:1.05rem;">📋 Customer Orders</h3>
+      ${_crmCanEdit()?`<button class="btn btn-blue" onclick="_crmOrdMode='create';_crmOrdItems=[{itemId:'',itemName:'',qty:'',mrp:'',remark:'',photo:''}];renderCRMOrdersTab()">➕ New Order</button>`:''}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <input type="text" placeholder="🔍 Search order / customer…" value="${_crmOrdSearch}"
+        oninput="_crmOrdSearch=this.value;renderCRMOrdersTab()"
+        style="padding:7px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:.85rem;flex:1;min-width:180px;">
+      <select onchange="_crmOrdStatusF=this.value;renderCRMOrdersTab()" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:.85rem;">
+        <option value="">All Status</option>
+        <option value="pending"   ${_crmOrdStatusF==='pending'  ?'selected':''}>⏳ Pending</option>
+        <option value="partial"   ${_crmOrdStatusF==='partial'  ?'selected':''}>📦 Partial</option>
+        <option value="completed" ${_crmOrdStatusF==='completed'?'selected':''}>✅ Completed</option>
+      </select>
+    </div>
+    ${orders.length===0?`<p style="text-align:center;color:#9ca3af;padding:32px;">No orders yet.</p>`:`
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.84rem;">
+      <thead><tr style="background:#f8fafc;text-align:left;">
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Order No</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Customer</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:right;white-space:nowrap;">Total Qty</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">ETD</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Status</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Remark</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;"></th>
+      </tr></thead>
+      <tbody>${orders.map(o=>{
+        const st=_crmOrderStatus(o);
+        const totalQty=(o.items||[]).reduce((s,i)=>s+(i.qty||0),0);
+        const hasPendingEdit=session.role==='admin'&&(DB.crmOrderEditReqs()||[]).some(r=>r.orderId===o.id&&r.status==='pending');
+        const etdCell=`<input type="date" value="${o.targetDate||''}"
+          onchange="crmUpdateTargetDate('${o.id}',this.value)"
+          style="padding:3px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:.78rem;width:118px;">`;
+
+        // ── Remark ──
+        let remark='';
+        if(st==='completed'){
+          const compDate=o.completionDate
+            ?new Date(o.completionDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
+            :'—';
+          remark=`<span style="color:#059669;font-weight:600;font-size:.78rem;">✅ Completed ${compDate}</span>`;
+        } else {
+          const items=o.items||[];
+          let inStock=0, outOfStock=0;
+          items.forEach(it=>{
+            const remaining=it.qty-((() => {
+              const pls=(DB.crmPackingLists()||[]).filter(p=>p.orderId===o.id&&p.status==='confirmed');
+              return pls.flatMap(p=>p.items||[]).filter(i=>i.itemId===it.itemId).reduce((s,i)=>s+(i.qty||0),0);
+            })());
+            if(remaining<=0){ inStock++; return; } // already dispatched
+            const avail=_crmGetAvailable(it.itemId);
+            avail>=remaining ? inStock++ : outOfStock++;
+          });
+          if(!items.length||outOfStock===items.length){
+            remark=`<span style="color:#dc2626;font-weight:600;font-size:.78rem;">❌ OUT OF STOCK</span>`;
+          } else if(outOfStock===0){
+            remark=`<span style="color:#059669;font-weight:600;font-size:.78rem;">✅ IN-STOCK</span>`;
+          } else {
+            remark=`<span style="color:#f59e0b;font-weight:600;font-size:.78rem;">⚠️ PARTIALLY IN STOCK</span>`;
+          }
+        }
+
+        return `<tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:8px 10px;font-weight:600;color:#2563eb;white-space:nowrap;">${o.orderNo}${hasPendingEdit?` <span title="Pending edit request" style="background:#fde68a;color:#92400e;border-radius:4px;font-size:.7rem;padding:1px 5px;font-weight:700;">⏳</span>`:''}</td>
+          <td style="padding:8px 10px;white-space:nowrap;">${o.customerName}</td>
+          <td style="padding:8px 10px;text-align:right;">${totalQty.toLocaleString('en-IN')}</td>
+          <td style="padding:8px 6px;">${etdCell}</td>
+          <td style="padding:8px 10px;">${_crmStatusBadge(st)}</td>
+          <td style="padding:8px 10px;white-space:nowrap;">${remark}</td>
+          <td style="padding:8px 6px;white-space:nowrap;display:flex;gap:4px;">
+            <button class="btn btn-xs btn-ghost" onclick="_crmOrdMode='view';_crmOrdViewId='${o.id}';renderCRMOrdersTab()">View</button>
+            ${_crmCanEdit()&&st!=='completed'?`<button class="btn btn-xs btn-ghost" style="color:#2563eb;" onclick="crmStartEditOrder('${o.id}')">Edit</button>`:''}
+            ${session.role==='admin'?`<button class="btn btn-xs btn-ghost" style="color:#dc2626;" onclick="crmDeleteOrder('${o.id}')">Delete</button>`:''}
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+    </div>`}
+  </div>`;
+}
+
+function _crmOrderCreateHTML(){
+  const isEdit = !!_crmOrdEditId;
+  const editOrder = isEdit ? (DB.crmOrders()||[]).find(o=>o.id===_crmOrdEditId) : null;
+
+  const rows=_crmOrdItems.map((it,i)=>`
+    <div style="display:grid;grid-template-columns:44px 1fr 74px 80px 1fr auto;gap:6px;align-items:center;margin-bottom:8px;" id="crmOrdRow_${i}">
+      <div style="position:relative;cursor:pointer;" onclick="crmPickItemPhoto(${i})">
+        ${_crmImgTag(it.photo||_crmItemPhoto(it.itemId),40)}
+        <input type="file" id="crmPhotoInp_${i}" accept="image/*" style="display:none" onchange="crmLoadItemPhoto(${i},this)">
+      </div>
+      <div style="position:relative;">
+        <input type="text" value="${(it.itemName||'').replace(/"/g,'&quot;')}" placeholder="Item name…"
+          oninput="_crmOrdItemSearch(${i},this.value)" autocomplete="off"
+          style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;box-sizing:border-box;">
+        <div id="crmOrdItemDD_${i}" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:6px;z-index:100;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+      </div>
+      <input type="number" value="${it.qty||''}" placeholder="Qty" min="1"
+        oninput="_crmOrdItems[${i}].qty=+this.value"
+        style="padding:7px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;width:100%;box-sizing:border-box;">
+      <input type="number" value="${it.mrp||''}" placeholder="MRP ₹" min="0" step="0.01"
+        oninput="_crmOrdItems[${i}].mrp=+this.value"
+        style="padding:7px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;width:100%;box-sizing:border-box;">
+      <input type="text" value="${(it.remark||'').replace(/"/g,'&quot;')}" placeholder="Special remark…"
+        oninput="_crmOrdItems[${i}].remark=this.value"
+        style="padding:7px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;width:100%;box-sizing:border-box;">
+      <button onclick="_crmSyncOrdItemNames();_crmOrdItems.splice(${i},1);renderCRMOrdersTab()"
+        style="background:none;border:none;color:#ef4444;font-size:1.2rem;cursor:pointer;padding:4px;">✕</button>
+    </div>`).join('');
+
+  return `<div style="padding:16px;max-width:700px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <button class="btn btn-ghost" onclick="_crmOrdMode='list';_crmOrdEditId=null;renderCRMOrdersTab()">← Back</button>
+      <h3 style="margin:0;">${isEdit?`Edit Order — ${editOrder?.orderNo||''}` : 'New Order'}</h3>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Order Date ✱</label>
+        <input type="date" id="crmOrdDate" value="${isEdit&&editOrder?editOrder.date:todayDate()}"
+          style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;"></div>
+      <div class="field"><label>Customer Name ✱</label>
+        <input type="text" id="crmOrdCustomer" placeholder="Customer name…" list="crmCustomerList"
+          value="${isEdit&&editOrder?(editOrder.customerName||'').replace(/"/g,'&quot;'):''}"
+          style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;">
+        <datalist id="crmCustomerList">
+          ${[...new Set((DB.crmOrders()||[]).map(o=>o.customerName))].map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('')}
+        </datalist>
+      </div>
+      <div class="field"><label>ETD (Target Delivery Date)</label>
+        <input type="date" id="crmOrdTargetDate"
+          value="${isEdit&&editOrder?editOrder.targetDate||'':''}"
+          style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;">
+      </div>
+    </div>
+    <div id="crmCreateCapHint" style="margin-bottom:8px;"></div>
+    <div style="margin-top:12px;">
+      <div style="display:grid;grid-template-columns:44px 1fr 74px 80px 1fr auto;gap:6px;margin-bottom:6px;">
+        <span style="font-size:.78rem;font-weight:600;color:#6b7280;">IMG</span>
+        <span style="font-size:.78rem;font-weight:600;color:#6b7280;">ITEM NAME</span>
+        <span style="font-size:.78rem;font-weight:600;color:#6b7280;">QTY</span>
+        <span style="font-size:.78rem;font-weight:600;color:#6b7280;">MRP (₹)</span>
+        <span style="font-size:.78rem;font-weight:600;color:#6b7280;">REMARK</span>
+        <span></span>
+      </div>
+      ${rows}
+      <button class="btn btn-ghost" style="margin-top:4px;"
+        onclick="_crmSyncOrdItemNames();_crmOrdItems.push({itemId:'',itemName:'',qty:'',mrp:'',remark:'',photo:''});renderCRMOrdersTab()">+ Add Item</button>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px;">
+      <button class="btn btn-blue" onclick="crmSaveOrder()">${isEdit?'💾 Update Order':'💾 Save Order'}</button>
+      <button class="btn btn-ghost" onclick="_crmOrdMode='list';_crmOrdEditId=null;renderCRMOrdersTab()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function _crmSyncOrdItemNames(){
+  _crmOrdItems.forEach((it,i)=>{
+    const textInps=document.querySelectorAll(`#crmOrdRow_${i} input[type=text]`);
+    if(textInps[0]) it.itemName=textInps[0].value.trim();
+    if(textInps[1]) it.remark=textInps[1].value.trim();
+    const qInp=document.querySelectorAll(`#crmOrdRow_${i} input[type=number]`);
+    if(qInp[0] && qInp[0].value!=='') it.qty=+qInp[0].value;
+    if(qInp[1] && qInp[1].value!=='') it.mrp=+qInp[1].value;
+  });
+}
+
+function _crmOrdItemSearch(idx, val){
+  _crmOrdItems[idx].itemName=val;
+  _crmOrdItems[idx].itemId='';
+  const dd=document.getElementById('crmOrdItemDD_'+idx); if(!dd) return;
+  if(!val.trim()){ dd.style.display='none'; return; }
+  const matches=(DB.crmItems()||[]).filter(it=>it.name.toLowerCase().includes(val.toLowerCase()));
+  if(!matches.length){ dd.style.display='none'; return; }
+  dd.style.display='block';
+  dd.innerHTML=matches.map(it=>{
+    const safeName=(it.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return`<div style="padding:7px 12px;cursor:pointer;font-size:.85rem;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px;"
+      onmousedown="crmSelectDropdownItem(${idx},'${it.id}','${safeName}',${it.mrp||0})">
+      ${it.photo?`<img src="${it.photo}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;border:1px solid #e5e7eb;flex-shrink:0;">`:`<span style="font-size:1.2rem;">📦</span>`}
+      <span>${it.name}${it.mrp?` <span style='color:#6b7280;font-size:.78rem;'>₹${it.mrp}</span>`:''}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── CAPACITY PLANNER ENGINE ───────────────────────────────────────────────────
+function _crmCapacityPlan(){
+  const DAY=86400000;
+  const todayMs=new Date().setHours(0,0,0,0);
+  const dispMap={};
+  (DB.crmPackingLists()||[]).filter(p=>p.status==='confirmed').forEach(p=>{
+    const qty=(p.items||[]).reduce((s,i)=>s+i.qty,0);
+    dispMap[p.orderId]=(dispMap[p.orderId]||0)+qty;
+  });
+  const active=(DB.crmOrders()||[]).map(o=>{
+    const totalQty=(o.items||[]).reduce((s,i)=>s+(i.qty||0),0);
+    const dispatched=dispMap[o.id]||0;
+    const remaining=Math.max(0,totalQty-dispatched);
+    const targetMs=o.targetDate?new Date(o.targetDate).setHours(0,0,0,0):null;
+    // startMs: when work begins; default = today
+    const startMs=o.startDate?Math.max(new Date(o.startDate).setHours(0,0,0,0),todayMs):todayMs;
+    const daysToTarget=targetMs!==null?Math.round((targetMs-todayMs)/DAY):null;
+    return{...o,totalQty,dispatched,remaining,targetMs,startMs,daysToTarget};
+  }).filter(o=>o.remaining>0).sort((a,b)=>{
+    const ta=a.targetMs!==null?a.targetMs:Infinity;
+    const tb=b.targetMs!==null?b.targetMs:Infinity;
+    return ta!==tb?ta-tb:new Date(a.createdAt)-new Date(b.createdAt);
+  });
+  // Sequential EDF scheduling (respects startMs)
+  let dayStart=todayMs, capLeft=CRM_CAPACITY_PER_DAY;
+  const schedule=active.map(order=>{
+    // fast-forward to order's start date if not yet started
+    if(order.startMs>dayStart){
+      dayStart=order.startMs; capLeft=CRM_CAPACITY_PER_DAY;
+    }
+    const startDay=dayStart;
+    let rem=order.remaining, endDay=dayStart;
+    while(rem>0){
+      const chunk=Math.min(rem,capLeft);
+      rem-=chunk; capLeft-=chunk; endDay=dayStart;
+      if(capLeft===0){ dayStart+=DAY; capLeft=CRM_CAPACITY_PER_DAY; }
+    }
+    const daysFromToday=Math.round((endDay-todayMs)/DAY);
+    const isDelayed=order.targetMs!==null&&endDay>order.targetMs;
+    const delayDays=isDelayed?Math.round((endDay-order.targetMs)/DAY):0;
+    const workDays=order.targetMs!==null&&order.startMs<=order.targetMs
+      ?Math.max(1,Math.round((order.targetMs-order.startMs)/DAY)):null;
+    const pairsPerDayNeeded=workDays?Math.ceil(order.remaining/workDays):null;
+    return{...order,startDay,endDay,daysFromToday,isDelayed,delayDays,pairsPerDayNeeded};
+  });
+  const dailyAlloc=[];
+  return{schedule,dailyAlloc,todayMs};
+}
+
+function _fmtPlanDate(ms){
+  return new Date(ms).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+}
+
+// ── PARALLEL DAILY ALLOCATION ENGINE ─────────────────────────────────────────
+// Computes how many pairs/day to assign to each active order in parallel,
+// prioritising earliest-deadline orders so all can meet their targets.
+// Returns per-order: allocated pairs/day + forecasted completion date.
+function _crmDailyAllocation(){
+  const DAY=86400000;
+  const todayMs=new Date().setHours(0,0,0,0);
+  const cap=CRM_CAPACITY_PER_DAY;
+  const dispMap={};
+  (DB.crmPackingLists()||[]).filter(p=>p.status==='confirmed').forEach(p=>{
+    const qty=(p.items||[]).reduce((s,i)=>s+i.qty,0);
+    dispMap[p.orderId]=(dispMap[p.orderId]||0)+qty;
+  });
+  const active=(DB.crmOrders()||[]).map(o=>{
+    const totalQty=(o.items||[]).reduce((s,i)=>s+(i.qty||0),0);
+    const remaining=Math.max(0,totalQty-(dispMap[o.id]||0));
+    const targetMs=o.targetDate?new Date(o.targetDate).setHours(0,0,0,0):null;
+    // startMs: work begins on startDate or today, whichever is later
+    const startMs=o.startDate?Math.max(new Date(o.startDate).setHours(0,0,0,0),todayMs):todayMs;
+    const notStartedYet=startMs>todayMs;
+    // Working days available = from startMs to targetMs
+    const workDays=targetMs!==null&&targetMs>startMs?Math.round((targetMs-startMs)/DAY):null;
+    const daysToTarget=targetMs!==null?Math.max(0,Math.round((targetMs-todayMs)/DAY)):null;
+    // min rate based on available work window (start → target)
+    const minRate=workDays!==null&&workDays>0?Math.ceil(remaining/workDays):
+                  targetMs!==null&&targetMs<=startMs?remaining:0;
+    return{...o,remaining,targetMs,startMs,daysToTarget,workDays,minRate,allocated:0,notStartedYet};
+  }).filter(o=>o.remaining>0)
+    .sort((a,b)=>{
+      const ta=a.targetMs!==null?a.targetMs:Infinity;
+      const tb=b.targetMs!==null?b.targetMs:Infinity;
+      return ta!==tb?ta-tb:new Date(a.createdAt)-new Date(b.createdAt);
+    });
+
+  // Only allocate pairs today to orders that have started
+  const startedToday=active.filter(a=>!a.notStartedYet);
+  const notStarted=active.filter(a=>a.notStartedYet);
+  let capLeft=cap;
+  // Pass 1 — give each started order its minimum required rate
+  startedToday.forEach(a=>{
+    const give=Math.min(a.minRate,a.remaining,capLeft);
+    a.allocated=give; capLeft-=give;
+  });
+  // Pass 2 — distribute leftover to earliest-deadline started orders
+  if(capLeft>0){
+    for(const a of startedToday){
+      if(capLeft<=0) break;
+      const extra=Math.min(a.remaining-a.allocated,capLeft);
+      a.allocated+=extra; capLeft-=extra;
+    }
+  }
+
+  return [...startedToday,...notStarted].map(a=>{
+    // For not-yet-started orders: forecast from their startMs
+    const effectiveStart=a.notStartedYet?a.startMs:todayMs;
+    // Use workDays-based allocation rate for not-yet-started
+    const effectiveRate=a.notStartedYet?(a.workDays?Math.ceil(a.remaining/a.workDays):0):a.allocated;
+    const daysToFinish=effectiveRate>0?Math.ceil(a.remaining/effectiveRate):null;
+    const forecastedMs=daysToFinish!==null?effectiveStart+daysToFinish*DAY:null;
+    const willMeet=a.targetMs!==null&&forecastedMs!==null?forecastedMs<=a.targetMs:null;
+    const delayDays=(a.targetMs!==null&&forecastedMs!==null&&forecastedMs>a.targetMs)
+      ?Math.round((forecastedMs-a.targetMs)/DAY):0;
+    return{...a,daysToFinish,forecastedMs,willMeet,delayDays,capUsed:a.allocated};
+  });
+}
+
+function _crmCapacityPlannerHTML(){
+  const allocs=_crmDailyAllocation();
+  const{schedule,todayMs}=_crmCapacityPlan();
+  if(!allocs.length) return `<div style="padding:12px 0;text-align:center;color:#9ca3af;font-size:.85rem;">No active orders in the queue.</div>`;
+  const totalRem=allocs.reduce((s,o)=>s+o.remaining,0);
+  const totalAlloc=allocs.reduce((s,o)=>s+o.allocated,0);
+  const delayed=allocs.filter(o=>o.willMeet===false).length;
+  const maxEnd=schedule.length?Math.max(...schedule.map(o=>o.endDay)):todayMs;
+  const daysToClean=Math.round((maxEnd-todayMs)/86400000);
+
+  const summary=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">
+    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px;text-align:center;">
+      <div style="font-size:1.25rem;font-weight:800;color:#0369a1;">${totalRem.toLocaleString('en-IN')}</div>
+      <div style="font-size:.72rem;color:#0369a1;margin-top:2px;">Pairs Remaining</div>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;text-align:center;">
+      <div style="font-size:1.25rem;font-weight:800;color:#15803d;">${totalAlloc} / ${CRM_CAPACITY_PER_DAY}</div>
+      <div style="font-size:.72rem;color:#15803d;margin-top:2px;">Today's Pairs Planned</div>
+    </div>
+    <div style="background:${delayed?'#fef2f2':'#f0fdf4'};border:1px solid ${delayed?'#fecaca':'#bbf7d0'};border-radius:8px;padding:10px;text-align:center;">
+      <div style="font-size:1.25rem;font-weight:800;color:${delayed?'#dc2626':'#15803d'};">${delayed}</div>
+      <div style="font-size:.72rem;color:${delayed?'#dc2626':'#15803d'};margin-top:2px;">At-Risk / Delayed</div>
+    </div>
+    <div style="background:#fafaf9;border:1px solid #e7e5e4;border-radius:8px;padding:10px;text-align:center;">
+      <div style="font-size:1.25rem;font-weight:800;color:#57534e;">${daysToClean}</div>
+      <div style="font-size:.72rem;color:#57534e;margin-top:2px;">Days to Clear Queue</div>
+    </div>
+  </div>`;
+
+  const rows=allocs.map((o,i)=>{
+    const hasTarget=o.targetMs!==null;
+    const tgtStr=hasTarget?_fmtPlanDate(o.targetMs):'—';
+    const fcastStr=o.forecastedMs?_fmtPlanDate(o.forecastedMs):'—';
+    // Status badge
+    let badge;
+    if(!hasTarget){
+      badge=`<span style="background:#f1f5f9;color:#6b7280;padding:2px 7px;border-radius:10px;font-size:.76rem;">No target</span>`;
+    } else if(o.willMeet){
+      badge=`<span style="background:#f0fdf4;color:#059669;padding:2px 7px;border-radius:10px;font-size:.76rem;font-weight:700;">✅ On track</span>`;
+    } else {
+      badge=`<span style="background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:10px;font-size:.76rem;font-weight:700;">⚠️ +${o.delayDays}d late</span>`;
+    }
+    // Allocated pairs/day — highlight if it's the minimum to meet target
+    const allocColor=o.allocated>0?(o.willMeet===false?'#dc2626':o.allocated===o.minRate?'#b45309':'#059669'):'#9ca3af';
+    const allocLabel=o.allocated>0?`<span style="font-weight:700;color:${allocColor};">${o.allocated}</span> pairs/day`:'<span style="color:#9ca3af;">0 — queued later</span>';
+    // Forecasted date colour
+    const fcastColor=o.willMeet===false?'#dc2626':o.willMeet===true?'#059669':'#374151';
+    return`<tr style="border-bottom:1px solid #f1f5f9;">
+      <td style="padding:7px 10px;color:#9ca3af;">${i+1}</td>
+      <td style="padding:7px 10px;font-weight:700;color:#2563eb;">${o.orderNo}</td>
+      <td style="padding:7px 10px;">${o.customerName}</td>
+      <td style="padding:7px 10px;text-align:center;font-weight:600;">${o.remaining.toLocaleString('en-IN')}</td>
+      <td style="padding:7px 10px;text-align:center;">${tgtStr}</td>
+      <td style="padding:7px 10px;text-align:center;">${allocLabel}</td>
+      <td style="padding:7px 10px;text-align:center;font-weight:600;color:${fcastColor};">${fcastStr}</td>
+      <td style="padding:7px 10px;text-align:center;">${badge}</td>
+    </tr>`;
+  }).join('');
+
+  const note=`<div style="font-size:.75rem;color:#6b7280;margin-top:8px;padding:8px 10px;background:#f8fafc;border-radius:6px;">
+    <strong>How to read:</strong> Allocated pairs/day = recommended daily production for each order running in parallel.
+    Forecasted Date = completion date at that daily rate. Ordered by earliest target first (EDF).
+    Capacity available after meeting minimums is given to the most urgent order.
+  </div>`;
+
+  return`${summary}
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+      <thead><tr style="background:#f1f5f9;">
+        <th style="padding:7px 10px;">#</th>
+        <th style="padding:7px 10px;text-align:left;">Order</th>
+        <th style="padding:7px 10px;text-align:left;">Customer</th>
+        <th style="padding:7px 10px;text-align:center;">Remaining Pairs</th>
+        <th style="padding:7px 10px;text-align:center;">Target Date</th>
+        <th style="padding:7px 10px;text-align:center;">Allocated Pairs/Day</th>
+        <th style="padding:7px 10px;text-align:center;">Forecasted Date</th>
+        <th style="padding:7px 10px;text-align:center;">Status</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>${note}`;
+}
+
+function _crmOrderCapacityCard(orderId){
+  const allocs=_crmDailyAllocation();
+  const{schedule}=_crmCapacityPlan();
+  const a=allocs.find(o=>o.id===orderId);
+  if(!a) return ''; // order completed, nothing to show
+  const hasTarget=a.targetMs!==null;
+  const onTrack=a.willMeet===true;
+  const delayed=a.willMeet===false;
+  const sc=delayed?'#dc2626':onTrack?'#059669':'#374151';
+  const sb=delayed?'#fef2f2':onTrack?'#f0fdf4':'#f8fafc';
+  const sbord=delayed?'#fecaca':onTrack?'#bbf7d0':'#e2e8f0';
+
+  const badge=delayed
+    ?`<span style="background:#dc2626;color:#fff;padding:2px 10px;border-radius:10px;font-size:.78rem;font-weight:700;">⚠️ Will miss target by ${a.delayDays} day(s)</span>`
+    :onTrack
+      ?`<span style="background:#059669;color:#fff;padding:2px 10px;border-radius:10px;font-size:.78rem;font-weight:700;">✅ On Track</span>`
+      :`<span style="background:#64748b;color:#fff;padding:2px 10px;border-radius:10px;font-size:.78rem;font-weight:700;">📋 No target set</span>`;
+
+  const daysLeftStr=hasTarget?(a.daysToTarget>=0?`${a.daysToTarget}d left`:`Overdue ${Math.abs(a.daysToTarget)}d`):'—';
+  const fcastColor=delayed?'#dc2626':onTrack?'#059669':'#374151';
+  const allocColor=a.allocated>0?(delayed?'#dc2626':onTrack?'#059669':'#1e40af'):'#9ca3af';
+  const queuePos=schedule.findIndex(o=>o.id===orderId);
+
+  return`<div style="background:${sb};border:1px solid ${sbord};border-radius:10px;padding:14px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px;">
+      <span style="font-size:.9rem;font-weight:700;color:${sc};">📊 Capacity Forecast</span>
+      ${badge}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:.82rem;margin-bottom:12px;">
+      <div style="background:rgba(255,255,255,.7);border-radius:6px;padding:8px 10px;">
+        <div style="color:#6b7280;font-size:.75rem;margin-bottom:3px;">Remaining Pairs</div>
+        <div style="font-weight:700;font-size:1rem;">${a.remaining.toLocaleString('en-IN')}</div>
+      </div>
+      <div style="background:rgba(255,255,255,.7);border-radius:6px;padding:8px 10px;">
+        <div style="color:#6b7280;font-size:.75rem;margin-bottom:3px;">Allocated Pairs/Day</div>
+        <div style="font-weight:700;font-size:1rem;color:${allocColor};">${a.allocated>0?a.allocated:'—'}</div>
+        ${a.minRate>0&&a.allocated<a.minRate?`<div style="color:#dc2626;font-size:.72rem;">Need ${a.minRate}/day to meet target</div>`:''}
+      </div>
+      <div style="background:rgba(255,255,255,.7);border-radius:6px;padding:8px 10px;">
+        <div style="color:#6b7280;font-size:.75rem;margin-bottom:3px;">Forecasted Date</div>
+        <div style="font-weight:700;font-size:1rem;color:${fcastColor};">${a.forecastedMs?_fmtPlanDate(a.forecastedMs):'—'}</div>
+        ${delayed?`<div style="color:#dc2626;font-size:.72rem;">${a.delayDays}d after target</div>`:
+          onTrack&&a.forecastedMs?`<div style="color:#059669;font-size:.72rem;">${Math.round((a.targetMs-a.forecastedMs)/86400000)}d before target</div>`:''}
+      </div>
+      <div style="background:rgba(255,255,255,.7);border-radius:6px;padding:8px 10px;">
+        <div style="color:#6b7280;font-size:.75rem;margin-bottom:3px;">Target Date</div>
+        <div style="font-weight:700;">${hasTarget?_fmtPlanDate(a.targetMs):'Not set'}</div>
+        ${hasTarget?`<div style="color:#6b7280;font-size:.72rem;">${daysLeftStr}</div>`:''}
+      </div>
+      <div style="background:rgba(255,255,255,.7);border-radius:6px;padding:8px 10px;">
+        <div style="color:#6b7280;font-size:.75rem;margin-bottom:3px;">Min Rate Needed</div>
+        <div style="font-weight:700;">${a.minRate>0?`${a.minRate} pairs/day`:'—'}</div>
+        ${a.minRate>CRM_CAPACITY_PER_DAY?`<div style="color:#dc2626;font-size:.72rem;">Exceeds total capacity!</div>`:''}
+      </div>
+      <div style="background:rgba(255,255,255,.7);border-radius:6px;padding:8px 10px;">
+        <div style="color:#6b7280;font-size:.75rem;margin-bottom:3px;">Queue Position</div>
+        <div style="font-weight:700;">#${queuePos>=0?queuePos+1:'—'} of ${schedule.length}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;font-size:.82rem;flex-wrap:wrap;">
+      <span style="color:#6b7280;white-space:nowrap;">Update target date:</span>
+      <input type="date" id="crmTgtDateInp_${orderId}" value="${a.targetDate||''}"
+        style="padding:4px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:.82rem;">
+      <button class="btn btn-xs btn-ghost" onclick="crmUpdateTargetDate('${orderId}',document.getElementById('crmTgtDateInp_${orderId}').value)">Apply</button>
+      ${a.targetDate?`<button class="btn btn-xs btn-ghost" style="color:#dc2626;" onclick="crmUpdateTargetDate('${orderId}','')">Clear</button>`:''}
+    </div>
+    <div style="margin-top:8px;font-size:.75rem;color:#6b7280;">Allocation based on ${CRM_CAPACITY_PER_DAY} pairs/day total capacity shared across ${allocs.length} active order(s).</div>
+  </div>`;
+}
+
+function crmUpdateTargetDate(orderId, newDate){
+  const orders=DB.crmOrders();
+  const order=orders.find(o=>o.id===orderId);
+  if(!order) return;
+  order.targetDate=newDate||'';
+  DB.save(K.crmOrders,orders);
+  renderCRMOrdersTab();
+}
+function crmUpdateStartDate(orderId, newDate){
+  const orders=DB.crmOrders();
+  const order=orders.find(o=>o.id===orderId);
+  if(!order) return;
+  order.startDate=newDate||'';
+  DB.save(K.crmOrders,orders);
+  renderCRMOrdersTab();
+}
+
+function crmSelectDropdownItem(idx, itemId, itemName, mrp){
+  _crmSyncOrdItemNames(); // preserve current qty/mrp/remark of other rows before re-render
+  const cur=_crmOrdItems[idx];
+  _crmOrdItems[idx]={itemId, itemName, qty: cur.qty||'', mrp, remark: cur.remark||'', photo:''};
+  renderCRMOrdersTab();
+}
+
+function crmStartEditOrder(orderId){
+  const order=(DB.crmOrders()||[]).find(o=>o.id===orderId);
+  if(!order) return;
+  if(_crmOrderStatus(order)==='completed'){ toast('Completed orders cannot be edited.','error'); return; }
+  _crmOrdEditId = orderId;
+  _crmOrdItems  = (order.items||[]).map(it=>({
+    itemId: it.itemId||'', itemName: it.itemName||'',
+    qty: it.qty||'', mrp: it.mrp||'',
+    remark: it.remark||'',
+    photo: _crmItemPhoto(it.itemId)||''
+  }));
+  if(!_crmOrdItems.length) _crmOrdItems=[{itemId:'',itemName:'',qty:'',mrp:'',remark:'',photo:''}];
+  _crmOrdMode='create';
+  renderCRMOrdersTab();
+}
+
+function crmDeleteOrder(orderId){
+  if(session.role!=='admin'){ toast('Only admins can delete orders.','error'); return; }
+  const order=(DB.crmOrders()||[]).find(o=>o.id===orderId);
+  if(!order) return;
+  if(!confirm(`Delete order ${order.orderNo} (${order.customerName})? This cannot be undone.`)) return;
+  const orders=DB.crmOrders().filter(o=>o.id!==orderId);
+  DB.save(K.crmOrders,orders);
+  toast(`Order ${order.orderNo} deleted.`,'success');
+  if(_crmOrdViewId===orderId){ _crmOrdMode='list'; _crmOrdViewId=''; }
+  renderCRMOrdersTab();
+}
+
+function crmApproveOrderEdit(reqId){
+  if(session.role!=='admin'){ toast('Only admins can approve edits.','error'); return; }
+  const reqs=DB.crmOrderEditReqs();
+  const req=reqs.find(r=>r.id===reqId);
+  if(!req||req.status!=='pending'){ toast('Request not found or already processed.','error'); return; }
+  const orders=DB.crmOrders();
+  const idx=orders.findIndex(o=>o.id===req.orderId);
+  if(idx===-1){ toast('Order not found.','error'); return; }
+  const ch=req.proposedChanges||{};
+  orders[idx].date=ch.date||orders[idx].date;
+  orders[idx].customerName=ch.customerName||orders[idx].customerName;
+  orders[idx].targetDate=ch.targetDate||orders[idx].targetDate;
+  if(ch.items&&ch.items.length) orders[idx].items=ch.items;
+  orders[idx].updatedAt=new Date().toISOString();
+  DB.save(K.crmOrders,orders);
+  req.status='approved'; req.resolvedAt=new Date().toISOString(); req.resolvedBy=session.userId;
+  DB.save(K.crmOrderEditReqs,reqs);
+  toast(`Edit approved — order ${orders[idx].orderNo} updated ✅`,'success');
+  renderCRMOrdersTab();
+}
+
+function crmRejectOrderEdit(reqId){
+  if(session.role!=='admin'){ toast('Only admins can reject edits.','error'); return; }
+  const reqs=DB.crmOrderEditReqs();
+  const req=reqs.find(r=>r.id===reqId);
+  if(!req||req.status!=='pending'){ toast('Request not found or already processed.','error'); return; }
+  req.status='rejected'; req.resolvedAt=new Date().toISOString(); req.resolvedBy=session.userId;
+  DB.save(K.crmOrderEditReqs,reqs);
+  toast(`Edit request rejected.`,'success');
+  renderCRMOrdersTab();
+}
+
+function crmSaveOrder(){
+  try{
+  _crmSyncOrdItemNames();
+  const date=document.getElementById('crmOrdDate')?.value?.trim();
+  const customer=_normStr(document.getElementById('crmOrdCustomer')?.value||'');
+  if(!date||!customer){ toast('Date and Customer Name are required.','error'); return; }
+  const items=_crmOrdItems.filter(it=>(it.itemName||'').trim()&&+it.qty>0);
+  items.forEach(it=>{ it.itemName=_normStr(it.itemName); });
+  if(!items.length){ toast('Add at least one item with a valid quantity (> 0).','error'); return; }
+
+  // Resolve / create items in catalog
+  const catalog=DB.crmItems()||[];
+  items.forEach(it=>{
+    if(!it.itemId){
+      const ex=catalog.find(c=>c.name.toLowerCase()===it.itemName.toLowerCase());
+      if(ex){ it.itemId=ex.id; ex.name=it.itemName; if(it.mrp&&it.mrp!==ex.mrp) ex.mrp=+it.mrp; if(it.photo) ex.photo=it.photo; }
+      else { const ni={id:_crmUID('crmi_'),name:it.itemName,mrp:+it.mrp||0,photo:it.photo||'',createdAt:new Date().toISOString()}; catalog.push(ni); it.itemId=ni.id; }
+    } else {
+      const cat=catalog.find(c=>c.id===it.itemId);
+      if(cat){ cat.name=_normStr(cat.name); if(it.mrp) cat.mrp=+it.mrp; if(it.photo) cat.photo=it.photo; }
+    }
+  });
+  DB.save(K.crmItems,catalog);
+
+  const targetDate=document.getElementById('crmOrdTargetDate')?.value||'';
+  const orders=DB.crmOrders();
+
+  if(_crmOrdEditId){
+    // UPDATE existing order
+    const idx=orders.findIndex(o=>o.id===_crmOrdEditId);
+    if(idx===-1){ toast('Order not found.','error'); return; }
+    const newItems=items.map(it=>({itemId:it.itemId,itemName:it.itemName,qty:+it.qty,mrp:+it.mrp||0,remark:it.remark||''}));
+    if(session.role==='admin'){
+      // Admin: save directly
+      orders[idx].date=date;
+      orders[idx].customerName=customer;
+      orders[idx].targetDate=targetDate;
+      orders[idx].items=newItems;
+      orders[idx].updatedAt=new Date().toISOString();
+      DB.save(K.crmOrders,orders);
+      const orderNo=orders[idx].orderNo;
+      toast(`Order ${orderNo} updated ✅`,'success');
+      _crmOrdMode='view'; _crmOrdViewId=_crmOrdEditId; _crmOrdEditId=null;
+    } else {
+      // Non-admin: submit edit request for approval
+      const req={
+        id:_crmUID('creq_'),
+        orderId:_crmOrdEditId,
+        orderNo:orders[idx].orderNo,
+        requestedBy:session.userId,
+        requestedByName:session.username||session.userId,
+        requestedAt:new Date().toISOString(),
+        status:'pending',
+        proposedChanges:{date, customerName:customer, targetDate, items:newItems}
+      };
+      const reqs=DB.crmOrderEditReqs();
+      reqs.push(req);
+      DB.save(K.crmOrderEditReqs,reqs);
+      toast(`Edit request submitted — awaiting admin approval ✅`,'success');
+      _crmOrdMode='view'; _crmOrdViewId=_crmOrdEditId; _crmOrdEditId=null;
+    }
+  } else {
+    // CREATE new order
+    const order={
+      id:_crmUID('crmo_'), orderNo:_crmNextOrderNo(),
+      date, customerName:customer, targetDate, completionDate:'',
+      items:items.map(it=>({itemId:it.itemId,itemName:it.itemName,qty:+it.qty,mrp:+it.mrp||0,remark:it.remark||''})),
+      createdBy:session.userId, createdAt:new Date().toISOString(),
+    };
+    orders.push(order); DB.save(K.crmOrders,orders);
+    toast(`Order ${order.orderNo} saved ✅`,'success');
+    _crmOrdMode='view'; _crmOrdViewId=order.id;
+  }
+  _crmOrdItems=[{itemId:'',itemName:'',qty:'',mrp:'',remark:'',photo:''}];
+  renderCRMOrdersTab();
+  }catch(err){ console.error('[CRM] crmSaveOrder error:',err); toast('Error saving order: '+err.message,'error'); }
+}
+
+function _crmOrderViewHTML(orderId){
+  const order=(DB.crmOrders()||[]).find(o=>o.id===orderId);
+  if(!order) return `<div style="padding:24px;"><button class="btn btn-ghost" onclick="_crmOrdMode='list';renderCRMOrdersTab()">← Back</button><p style="margin-top:12px;">Order not found.</p></div>`;
+  const pls=(DB.crmPackingLists()||[]).filter(p=>p.orderId===orderId&&p.status==='confirmed');
+  const dispMap={}; pls.forEach(p=>(p.items||[]).forEach(i=>{ dispMap[i.itemId]=(dispMap[i.itemId]||0)+i.qty; }));
+  const st=_crmOrderStatus(order);
+  const hasDispatchable=order.items.some(it=>_crmGetAvailable(it.itemId)>0&&(it.qty-(dispMap[it.itemId]||0))>0);
+  const totalAmt=order.items.reduce((s,i)=>s+(i.qty*(i.mrp||0)),0);
+
+  const rows=order.items.map(it=>{
+    const avail=_crmGetAvailable(it.itemId);
+    const disp=dispMap[it.itemId]||0;
+    const remaining=it.qty-disp;
+    const photo=_crmItemPhoto(it.itemId);
+    return `<tr style="border-bottom:1px solid #f1f5f9;">
+      <td style="padding:6px 8px;">${_crmImgTag(photo,38)}</td>
+      <td style="padding:8px 10px;">${it.itemName}</td>
+      <td style="padding:8px 10px;text-align:center;">${it.qty}</td>
+      <td style="padding:8px 10px;text-align:right;">₹${it.mrp||0}</td>
+      <td style="padding:8px 10px;text-align:center;font-weight:600;color:${avail>0?'#059669':'#dc2626'};">${avail}</td>
+      <td style="padding:8px 10px;text-align:center;color:#2563eb;">${disp}</td>
+      <td style="padding:8px 10px;text-align:center;font-weight:600;color:${remaining>0?'#92400e':'#059669'};">${remaining}</td>
+      <td style="padding:8px 10px;font-size:.82rem;color:#6b7280;font-style:italic;">${it.remark||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  // Pending edit requests for this order (admin sees them)
+  const pendingReqs=session.role==='admin'?(DB.crmOrderEditReqs()||[]).filter(r=>r.orderId===orderId&&r.status==='pending'):[];
+  const pendingReqsHTML=pendingReqs.length?`
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px;margin-bottom:16px;">
+      <h4 style="margin:0 0 10px;color:#92400e;font-size:.9rem;">⏳ Pending Edit Requests</h4>
+      ${pendingReqs.map(r=>{
+        const ch=r.proposedChanges||{};
+        return `<div style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:8px;">
+          <div style="font-size:.82rem;color:#6b7280;margin-bottom:6px;">Requested by <strong>${r.requestedByName}</strong> on ${new Date(r.requestedAt).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+          <div style="font-size:.82rem;margin-bottom:8px;">
+            <strong>Changes:</strong> Date: ${ch.date||'—'} | Customer: ${ch.customerName||'—'} | ETD: ${ch.targetDate||'—'} | Items: ${(ch.items||[]).length}
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-blue" style="font-size:.8rem;padding:5px 12px;" onclick="crmApproveOrderEdit('${r.id}')">✅ Approve</button>
+            <button class="btn btn-ghost" style="font-size:.8rem;padding:5px 12px;color:#dc2626;" onclick="crmRejectOrderEdit('${r.id}')">✕ Reject</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`:''  ;
+
+  return `<div style="padding:16px;max-width:760px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-ghost" onclick="_crmOrdMode='list';renderCRMOrdersTab()">← Back</button>
+        <h3 style="margin:0;">${order.orderNo}</h3>
+        ${_crmStatusBadge(st)}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" onclick="crmPrintOrder('${order.id}')">🖨️ Print</button>
+        ${_crmCanEdit()&&st!=='completed'?`<button class="btn btn-ghost" style="color:#2563eb;" onclick="crmStartEditOrder('${order.id}')">✏️ Edit</button>`:''}
+        ${_crmCanEdit()&&hasDispatchable&&st!=='completed'?
+          `<button class="btn btn-blue" onclick="crmStartPackingList('${order.id}')">🚚 Create Packing List</button>`:''}
+        ${session.role==='admin'?`<button class="btn btn-ghost" style="color:#dc2626;" onclick="crmDeleteOrder('${order.id}')">🗑️ Delete</button>`:''}
+      </div>
+    </div>
+    ${pendingReqsHTML}
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.88rem;">
+      <div><span style="color:#6b7280;">Date:</span> <strong>${order.date}</strong></div>
+      <div><span style="color:#6b7280;">Customer:</span> <strong>${order.customerName}</strong></div>
+      <div><span style="color:#6b7280;">Order Value:</span> <strong>₹${totalAmt.toLocaleString('en-IN')}</strong></div>
+      <div><span style="color:#6b7280;">Packing Lists:</span> <strong>${pls.length}</strong></div>
+      ${order.targetDate?`<div><span style="color:#6b7280;">ETD:</span> <strong>${new Date(order.targetDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</strong></div>`:''}
+      ${order.completionDate?`<div><span style="color:#6b7280;">Completed:</span> <strong style="color:#059669;">${new Date(order.completionDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</strong></div>`:''}
+    </div>
+    <div style="overflow-x:auto;margin-bottom:16px;">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+      <thead><tr style="background:#f8fafc;">
+        <th style="padding:8px;border-bottom:1px solid #e5e7eb;width:50px;"></th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Ordered</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">MRP</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">In Stock</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Dispatched</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Remaining</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Remark</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>
+    ${pls.length?`<h4 style="margin:0 0 8px;font-size:.9rem;">Packing Lists</h4>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+    ${pls.map(p=>`<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;font-size:.85rem;">
+      <span><strong>${p.plNo}</strong> · ${p.date} · ${(p.items||[]).length} item(s) · ${(p.items||[]).reduce((s,i)=>s+i.qty,0)} units</span>
+      <button class="btn btn-xs btn-ghost" onclick="_crmPlMode='view';_crmPlViewId='${p.id}';openTab('tab-crm-packing','crm')">View PL →</button>
+    </div>`).join('')}
+    </div>`:''}
+  </div>`;
+}
+
+function crmPrintOrder(orderId){
+  const order=(DB.crmOrders()||[]).find(o=>o.id===orderId); if(!order) return;
+  const pls=(DB.crmPackingLists()||[]).filter(p=>p.orderId===orderId&&p.status==='confirmed');
+  const dispMap={}; pls.forEach(p=>(p.items||[]).forEach(i=>{ dispMap[i.itemId]=(dispMap[i.itemId]||0)+i.qty; }));
+  const totalAmt=order.items.reduce((s,i)=>s+(i.qty*(i.mrp||0)),0);
+  const rows=order.items.map((it,idx)=>{
+    const photo=_crmItemPhoto(it.itemId);
+    const disp=dispMap[it.itemId]||0;
+    return `<tr>
+      <td>${idx+1}</td>
+      <td>${photo?`<img class="ii" src="${photo}">`:`<div class="img-ph">📦</div>`}</td>
+      <td>${it.itemName}</td>
+      <td style="text-align:center;">${it.qty}</td>
+      <td style="text-align:right;">₹${it.mrp||0}</td>
+      <td style="text-align:right;">₹${(it.qty*(it.mrp||0)).toLocaleString('en-IN')}</td>
+      <td style="text-align:center;color:${disp>0?'#059669':'#888'};">${disp}</td>
+      <td style="font-style:italic;color:#555;">${it.remark||''}</td>
+    </tr>`;
+  }).join('');
+  const html=`
+  <div class="ph">
+    ${_NIIC_LOGO_SVG}
+    <div class="ph-info">
+      <h1>Nivansh India Infant Care</h1>
+      <p>NIIC ERP · Customer Order</p>
+    </div>
+    <div class="ph-badge">ORDER</div>
+  </div>
+  <div class="meta">
+    <div class="meta-item"><span>Order No: </span><strong>${order.orderNo}</strong></div>
+    <div class="meta-item"><span>Customer: </span><strong>${order.customerName}</strong></div>
+    <div class="meta-item"><span>Date: </span><strong>${order.date}</strong></div>
+    <div class="meta-item"><span>Status: </span><strong>${_crmOrderStatus(order).toUpperCase()}</strong></div>
+    <div class="meta-item"><span>Packing Lists: </span><strong>${pls.length}</strong></div>
+    <div class="meta-item"><span>Order Value: </span><strong>₹${totalAmt.toLocaleString('en-IN')}</strong></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>#</th><th style="width:54px;">Img</th><th>Item</th>
+      <th style="text-align:center;">Qty</th><th style="text-align:right;">MRP</th>
+      <th style="text-align:right;">Amount</th><th style="text-align:center;">Dispatched</th>
+      <th>Remark</th>
+    </tr></thead>
+    <tbody>${rows}
+    <tr class="tr">
+      <td colspan="3">Total</td>
+      <td style="text-align:center;">${order.items.reduce((s,i)=>s+i.qty,0)}</td>
+      <td></td>
+      <td style="text-align:right;">₹${totalAmt.toLocaleString('en-IN')}</td>
+      <td></td>
+      <td></td>
+    </tr>
+    </tbody>
+  </table>
+  <div class="footer"><span>NIIC ERP · Printed on ${new Date().toLocaleString('en-IN')}</span><span>${order.orderNo}</span></div>`;
+  _niicPrint(`Order ${order.orderNo}`, html);
+}
+
+// ── FG WAREHOUSE TAB ──────────────────────────────────────────────────────────
+let _crmFGSelected = new Set();   // selected entry ids for bulk ops
+let _crmFGEditId   = null;        // entry id currently being edited
+let _crmFGEditRow  = {};          // live edit values {date,name,qty} updated via oninput
+let _crmFGSearch   = '';          // search filter for entries
+
+function renderCRMFGStockTab(){
+  const el=document.getElementById('tab-crm-fg'); if(!el) return;
+  const summary=_crmGetStockSummary();
+  const users=DB.users()||[];
+  let entries=[...(DB.crmFGStock()||[])].reverse();
+  if(_crmFGSearch) entries=entries.filter(e=>(e.itemName||'').toLowerCase().includes(_crmFGSearch.toLowerCase()));
+  const canEdit=_crmCanEdit();
+  const allIds=entries.map(e=>e.id);
+  const allChecked=allIds.length>0&&allIds.every(id=>_crmFGSelected.has(id));
+
+  const entryRows=entries.map(e=>{
+    const isEditing=_crmFGEditId===e.id;
+    const checked=_crmFGSelected.has(e.id);
+    if(isEditing){
+      // initialise live-edit state (side-effect during render)
+      _crmFGEditRow={date:e.date||'',name:e.itemName||'',qty:+(e.qty)||1};
+      return`<tr style="border-bottom:1px solid #f1f5f9;background:#eff6ff;">
+        <td style="padding:6px 8px;"><input type="checkbox" ${checked?'checked':''} onchange="crmFGToggleSel('${e.id}',this.checked)"></td>
+        <td style="padding:6px 8px;"><input type="date" value="${e.date}" oninput="_crmFGEditRow.date=this.value" style="padding:4px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:.82rem;width:120px;"></td>
+        <td style="padding:6px 8px;"><input type="text" value="${(e.itemName||'').replace(/"/g,'&quot;')}" oninput="_crmFGEditRow.name=this.value" style="padding:4px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:.82rem;width:100%;box-sizing:border-box;"></td>
+        <td style="padding:6px 8px;text-align:center;"><input type="number" value="${e.qty}" min="1" oninput="_crmFGEditRow.qty=+this.value||1" style="padding:4px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:.82rem;width:70px;text-align:center;"></td>
+        <td style="padding:6px 8px;color:#6b7280;">${users.find(u=>u.id===e.enteredBy)?.username||'—'}</td>
+        <td style="padding:6px 8px;white-space:nowrap;">
+          <button class="btn btn-xs btn-blue" onclick="crmFGSaveEdit('${e.id}')">Save</button>
+          <button class="btn btn-xs btn-ghost" onclick="_crmFGEditId=null;renderCRMFGStockTab()">Cancel</button>
+        </td>
+      </tr>`;
+    }
+    return`<tr style="border-bottom:1px solid #f9fafb;${checked?'background:#f0f9ff;':''}">
+      <td style="padding:6px 8px;"><input type="checkbox" ${checked?'checked':''} onchange="crmFGToggleSel('${e.id}',this.checked)"></td>
+      <td style="padding:6px 10px;">${e.date}</td>
+      <td style="padding:6px 10px;">${e.itemName}</td>
+      <td style="padding:6px 10px;text-align:center;font-weight:600;">${e.qty}</td>
+      <td style="padding:6px 10px;color:#6b7280;">${users.find(u=>u.id===e.enteredBy)?.username||'—'}</td>
+      ${canEdit?`<td style="padding:6px 8px;white-space:nowrap;">
+        <button class="btn btn-xs btn-ghost" onclick="_crmFGEditId='${e.id}';renderCRMFGStockTab()">✏️</button>
+        <button class="btn btn-xs btn-ghost" style="color:#dc2626;" onclick="crmFGDeleteEntry('${e.id}')">🗑️</button>
+      </td>`:`<td></td>`}
+    </tr>`;
+  }).join('');
+
+  el.innerHTML=`<div style="padding:16px;">
+    <h3 style="margin:0 0 14px;font-size:1.05rem;">📦 FG Warehouse</h3>
+    ${canEdit?`<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px;">
+      <h4 style="margin:0 0 10px;font-size:.9rem;color:#374151;">Add Stock Entry</h4>
+      <div style="display:grid;grid-template-columns:1fr 120px 140px auto;gap:8px;align-items:end;">
+        <div>
+          <label style="font-size:.78rem;color:#6b7280;display:block;margin-bottom:3px;">Item ✱</label>
+          <div style="position:relative;">
+            <input type="text" id="crmFGItemInp" placeholder="Type item name…" oninput="crmFGItemSearch(this.value)" autocomplete="off"
+              style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;box-sizing:border-box;">
+            <input type="hidden" id="crmFGItemId">
+            <div id="crmFGItemDD" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:6px;z-index:100;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:.78rem;color:#6b7280;display:block;margin-bottom:3px;">Qty ✱</label>
+          <input type="number" id="crmFGQty" min="1" placeholder="0"
+            style="width:100%;padding:7px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;box-sizing:border-box;">
+        </div>
+        <div>
+          <label style="font-size:.78rem;color:#6b7280;display:block;margin-bottom:3px;">Date ✱</label>
+          <input type="date" id="crmFGDate" value="${todayDate()}"
+            style="width:100%;padding:7px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;box-sizing:border-box;">
+        </div>
+        <button class="btn btn-blue" style="height:36px;" onclick="crmFGSaveEntry()">Add</button>
+      </div>
+    </div>`:''}
+
+    <h4 style="margin:0 0 8px;font-size:.9rem;">Stock Summary</h4>
+    ${summary.length===0?`<p style="color:#9ca3af;font-size:.85rem;padding:8px 0;">No stock entries yet.</p>`:`
+    <div style="overflow-x:auto;margin-bottom:20px;">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+      <thead><tr style="background:#f8fafc;">
+        <th style="padding:8px 6px;border-bottom:1px solid #e5e7eb;width:44px;"></th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Total In</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Dispatched</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Available</th>
+      </tr></thead>
+      <tbody>${summary.map(r=>{
+        const photo=_crmItemPhoto(r.itemId);
+        return `<tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:6px 8px;">${_crmImgTag(photo,36)}</td>
+          <td style="padding:8px 10px;">${r.itemName}</td>
+          <td style="padding:8px 10px;text-align:center;">${r.inward}</td>
+          <td style="padding:8px 10px;text-align:center;color:#dc2626;">${r.dispatched}</td>
+          <td style="padding:8px 10px;text-align:center;font-weight:700;color:${r.available>0?'#059669':'#9ca3af'};">${r.available}</td>
+        </tr>`;}).join('')}</tbody>
+    </table>
+    </div>`}
+
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+      <h4 style="margin:0;font-size:.9rem;">All Entries ${entries.length?`<span style="font-weight:400;color:#6b7280;">(${entries.length})</span>`:''}</h4>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" placeholder="🔍 Search item…" value="${_crmFGSearch}"
+          oninput="_crmFGSearch=this.value;renderCRMFGStockTab()"
+          style="padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;width:170px;">
+        ${canEdit&&_crmFGSelected.size>0?`<button class="btn btn-xs" style="background:#dc2626;color:#fff;border:none;" onclick="crmFGBulkDelete()">🗑️ Delete Selected (${_crmFGSelected.size})</button>`:''}
+      </div>
+    </div>
+
+    ${entries.length===0?`<p style="color:#9ca3af;font-size:.85rem;padding:8px 0;">${_crmFGSearch?'No matching entries.':'No entries yet.'}</p>`:`
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+      <thead><tr style="background:#f8fafc;">
+        <th style="padding:6px 8px;border-bottom:1px solid #e5e7eb;width:32px;">
+          ${canEdit?`<input type="checkbox" title="Select all" ${allChecked?'checked':''} onchange="crmFGSelectAll(this.checked)">`:''}
+        </th>
+        <th style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Date</th>
+        <th style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>
+        <th style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Qty</th>
+        <th style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">By</th>
+        <th style="padding:6px 10px;border-bottom:1px solid #e5e7eb;width:90px;"></th>
+      </tr></thead>
+      <tbody>${entryRows}</tbody>
+    </table>
+    </div>`}
+  </div>`;
+}
+
+function crmFGToggleSel(id, checked){
+  checked ? _crmFGSelected.add(id) : _crmFGSelected.delete(id);
+  renderCRMFGStockTab();
+}
+function crmFGSelectAll(checked){
+  const entries=[...(DB.crmFGStock()||[])].filter(e=>!_crmFGSearch||(e.itemName||'').toLowerCase().includes(_crmFGSearch.toLowerCase()));
+  entries.forEach(e=> checked ? _crmFGSelected.add(e.id) : _crmFGSelected.delete(e.id));
+  renderCRMFGStockTab();
+}
+function crmFGDeleteEntry(id){
+  if(!confirm('Delete this entry?')) return;
+  const all=DB.crmFGStock().filter(e=>e.id!==id);
+  _crmFGSelected.delete(id);
+  DB.save(K.crmFGStock,all);
+  toast('Entry deleted','success');
+  renderCRMFGStockTab();
+}
+function crmFGBulkDelete(){
+  const n=_crmFGSelected.size;
+  if(!n||!confirm(`Delete ${n} selected entr${n===1?'y':'ies'}? This cannot be undone.`)) return;
+  const all=DB.crmFGStock().filter(e=>!_crmFGSelected.has(e.id));
+  _crmFGSelected.clear();
+  DB.save(K.crmFGStock,all);
+  toast(`${n} entr${n===1?'y':'ies'} deleted`,'success');
+  renderCRMFGStockTab();
+}
+function crmFGSaveEdit(id){
+  const all=DB.crmFGStock();
+  const e=all.find(x=>x.id===id); if(!e) return;
+  // read from live-edit state object (populated by oninput handlers)
+  const newDate=_crmFGEditRow.date||e.date;
+  const newName=_normStr(_crmFGEditRow.name||e.itemName);
+  const newQty=(_crmFGEditRow.qty>=1)?_crmFGEditRow.qty:(+(e.qty)||1);
+  if(!newName){ toast('Item name required','error'); return; }
+  if(newQty<1){ toast('Qty must be ≥ 1','error'); return; }
+  e.date=newDate; e.itemName=newName; e.qty=newQty; e.updatedAt=new Date().toISOString();
+  // sync name in catalog too
+  const catalog=DB.crmItems()||[];
+  const cat=catalog.find(c=>c.id===e.itemId);
+  if(cat){ cat.name=newName; DB.save(K.crmItems,catalog); }
+  DB.save(K.crmFGStock,all);
+  _crmFGEditId=null;
+  _crmFGEditRow={};
+  toast('Entry updated','success');
+  renderCRMFGStockTab();
+}
+
+function _crmPlItemSearch(idx, val){
+  const dd=document.getElementById('plExtraDD_'+idx); if(!dd) return;
+  if(!(val||'').trim()){ dd.style.display='none'; return; }
+  const matches=(DB.crmItems()||[]).filter(it=>it.name.toLowerCase().includes(val.toLowerCase()));
+  if(!matches.length){ dd.style.display='none'; return; }
+  dd.style.display='block';
+  dd.innerHTML=matches.map(it=>{
+    const safeName=(it.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return`<div style="padding:7px 12px;cursor:pointer;font-size:.85rem;border-bottom:1px solid #f1f5f9;"
+      onmousedown="_crmPlExtraItems[${idx}].itemName='${safeName}';_crmPlExtraItems[${idx}].itemId='${it.id}';document.querySelector('#plExtraRow_${idx} input[type=text]').value='${safeName}';document.getElementById('plExtraDD_${idx}').style.display='none';">
+      ${it.name}</div>`;
+  }).join('');
+}
+
+function crmFGItemSearch(val){
+  document.getElementById('crmFGItemId').value='';
+  const dd=document.getElementById('crmFGItemDD'); if(!dd) return;
+  if(!val.trim()){ dd.style.display='none'; return; }
+  const matches=(DB.crmItems()||[]).filter(it=>it.name.toLowerCase().includes(val.toLowerCase()));
+  if(!matches.length){ dd.style.display='none'; return; }
+  dd.style.display='block';
+  dd.innerHTML=matches.map(it=>{
+    const safeName=(it.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return`<div style="padding:8px 12px;cursor:pointer;font-size:.85rem;border-bottom:1px solid #f1f5f9;"
+      onmousedown="document.getElementById('crmFGItemInp').value='${safeName}';document.getElementById('crmFGItemId').value='${it.id}';document.getElementById('crmFGItemDD').style.display='none';">
+      ${it.name}</div>`;
+  }).join('');
+}
+
+function crmFGSaveEntry(){
+  const name=_normStr(document.getElementById('crmFGItemInp')?.value||'');
+  const id  =document.getElementById('crmFGItemId')?.value?.trim();
+  const qty =+(document.getElementById('crmFGQty')?.value)||0;
+  const date=document.getElementById('crmFGDate')?.value;
+  if(!name){ toast('Enter item name','error'); return; }
+  if(qty<=0){ toast('Quantity must be > 0','error'); return; }
+  if(!date){ toast('Date required','error'); return; }
+
+  let itemId=id;
+  const catalog=DB.crmItems()||[];
+  if(!itemId){
+    const ex=catalog.find(c=>c.name.toLowerCase()===name.toLowerCase());
+    if(ex){ itemId=ex.id; }
+    else { const ni={id:_crmUID('crmi_'),name,mrp:0,createdAt:new Date().toISOString()}; catalog.push(ni); DB.save(K.crmItems,catalog); itemId=ni.id; }
+  }
+
+  const entry={id:_crmUID('crmfg_'),date,itemId,itemName:name,qty,enteredBy:session.userId,createdAt:new Date().toISOString()};
+  const all=DB.crmFGStock(); all.push(entry); DB.save(K.crmFGStock,all);
+  document.getElementById('crmFGItemInp').value='';
+  document.getElementById('crmFGItemId').value='';
+  document.getElementById('crmFGQty').value='';
+  toast(`${qty} × ${name} added to FG stock ✅`,'success');
+  renderCRMFGStockTab();
+}
+
+// ── PACKING LIST TAB ──────────────────────────────────────────────────────────
+function renderCRMPackingTab(){
+  const el=document.getElementById('tab-crm-packing'); if(!el) return;
+  if(_crmPlMode==='create')  { el.innerHTML=_crmPackCreateHTML(_crmPlOrderId); return; }
+  if(_crmPlMode==='view')    { el.innerHTML=_crmPackViewHTML(_crmPlViewId); return; }
+  if(_crmPlMode==='boxes')   { el.innerHTML=_crmBoxBuilderHTML(_crmPlViewId); return; }
+  if(_crmPlMode==='preview') { el.innerHTML=_crmPackPreviewHTML(_crmPlOrderId); return; }
+
+  const pls=[...(DB.crmPackingLists()||[])].reverse();
+  el.innerHTML=`<div style="padding:16px;">
+    <h3 style="margin:0 0 14px;font-size:1.05rem;">🚚 Packing Lists</h3>
+    ${pls.length===0?`<p style="color:#9ca3af;padding:24px;text-align:center;">No packing lists yet.<br>Create one from an Order → View → Create Packing List.</p>`:`
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+      <thead><tr style="background:#f8fafc;">
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">PL No</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;">Date</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;">Order No</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;">Customer</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Units</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;"></th>
+      </tr></thead>
+      <tbody>${pls.map(p=>`<tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px 10px;font-weight:600;color:#2563eb;">${p.plNo}</td>
+        <td style="padding:8px 10px;">${p.date}</td>
+        <td style="padding:8px 10px;">${p.orderNo}</td>
+        <td style="padding:8px 10px;">${p.customerName}</td>
+        <td style="padding:8px 10px;text-align:center;font-weight:600;">${(p.items||[]).reduce((s,i)=>s+i.qty,0)}</td>
+        <td style="padding:8px 10px;white-space:nowrap;display:flex;gap:4px;">
+          <button class="btn btn-xs btn-ghost"
+            onclick="_crmPlMode='view';_crmPlViewId='${p.id}';renderCRMPackingTab()">View</button>
+          ${session.role==='admin'?`<button class="btn btn-xs btn-ghost" style="color:#dc2626;"
+            onclick="crmDeletePackingList('${p.id}')">Delete</button>`:''}
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>
+    </div>`}
+  </div>`;
+}
+
+function crmStartPackingList(orderId){
+  _crmPlMode='create'; _crmPlOrderId=orderId; _crmPlPackItems={}; _crmPlExtraItems=[]; _crmBxDraft=[];
+  openTab('tab-crm-packing','crm');
+}
+
+function crmDeletePackingList(plId){
+  if(session.role!=='admin'){ toast('Only admins can delete packing lists.','error'); return; }
+  const pl=(DB.crmPackingLists()||[]).find(p=>p.id===plId);
+  if(!pl) return;
+  if(!confirm(`Delete packing list ${pl.plNo}? This will reverse the dispatch of ${(pl.items||[]).reduce((s,i)=>s+i.qty,0)} units and cannot be undone.`)) return;
+  const all=DB.crmPackingLists().filter(p=>p.id!==plId);
+  DB.save(K.crmPackingLists,all);
+  toast(`${pl.plNo} deleted.`,'success');
+  if(_crmPlViewId===plId){ _crmPlMode='list'; _crmPlViewId=''; }
+  renderCRMPackingTab();
+}
+
+function _crmPackCreateHTML(orderId){
+  const order=(DB.crmOrders()||[]).find(o=>o.id===orderId);
+  if(!order) return `<div style="padding:24px;"><button class="btn btn-ghost" onclick="_crmPlMode='list';renderCRMPackingTab()">← Back</button><p style="margin-top:12px;">Order not found.</p></div>`;
+  const pls=(DB.crmPackingLists()||[]).filter(p=>p.orderId===orderId&&p.status==='confirmed');
+  const dispMap={}; pls.forEach(p=>(p.items||[]).forEach(i=>{ dispMap[i.itemId]=(dispMap[i.itemId]||0)+i.qty; }));
+
+  const dispatchable=order.items.filter(it=>{
+    const avail=_crmGetAvailable(it.itemId);
+    return avail>0&&(it.qty-(dispMap[it.itemId]||0))>0;
+  });
+
+  // Pre-fill default dispatch qty
+  dispatchable.forEach(it=>{
+    if(_crmPlPackItems[it.itemId]===undefined){
+      const avail=_crmGetAvailable(it.itemId);
+      const remaining=it.qty-(dispMap[it.itemId]||0);
+      _crmPlPackItems[it.itemId]=Math.min(avail,remaining);
+    }
+  });
+
+  const rows=dispatchable.map(it=>{
+    const avail=_crmGetAvailable(it.itemId);
+    const remaining=it.qty-(dispMap[it.itemId]||0);
+    const maxQty=Math.min(avail,remaining);
+    const cur=_crmPlPackItems[it.itemId]??maxQty;
+    const photo=_crmItemPhoto(it.itemId);
+    return `<tr style="border-bottom:1px solid #f1f5f9;">
+      <td style="padding:6px 8px;">${_crmImgTag(photo,36)}</td>
+      <td style="padding:8px 10px;">${it.itemName}</td>
+      <td style="padding:8px 10px;text-align:center;color:#92400e;">${remaining}</td>
+      <td style="padding:8px 10px;text-align:center;color:#059669;font-weight:600;">${avail}</td>
+      <td style="padding:8px 10px;text-align:center;">${maxQty}</td>
+      <td style="padding:8px 10px;text-align:center;">
+        <input type="number" min="0" max="${maxQty}" value="${cur}"
+          onchange="_crmPlPackItems['${it.itemId}']=Math.min(${maxQty},Math.max(0,+this.value||0))"
+          style="width:70px;padding:5px 6px;border:1px solid #d1d5db;border-radius:5px;text-align:center;font-size:.85rem;">
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `<div style="padding:16px;max-width:700px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <button class="btn btn-ghost" onclick="_crmOrdMode='view';_crmOrdViewId='${orderId}';_crmPlMode='list';openTab('tab-crm-orders','crm')">← Back to Order</button>
+      <h3 style="margin:0;">Create Packing List</h3>
+    </div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:.88rem;">
+      <strong>${order.orderNo}</strong> · ${order.customerName} · ${order.date}
+    </div>
+    <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">
+      <label style="font-size:.82rem;color:#6b7280;white-space:nowrap;">Dispatch Date:</label>
+      <input type="date" id="crmPlDate" value="${todayDate()}"
+        style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;">
+    </div>
+    ${dispatchable.length===0
+      ?`<p style="color:#6b7280;padding:8px 0;font-size:.88rem;">No order items currently in FG stock — you can still add items manually below.</p>`
+      :`<div style="overflow-x:auto;margin-bottom:16px;">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+      <thead><tr style="background:#f8fafc;">
+        <th style="padding:8px 6px;border-bottom:1px solid #e5e7eb;width:44px;"></th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Remaining</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">In Stock</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Max</th>
+        <th style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Dispatch Qty</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>`}
+
+    <!-- ── Manually added items ── -->
+    <div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <span style="font-size:.88rem;font-weight:700;color:#374151;">➕ Additional Items</span>
+        <button class="btn btn-xs btn-ghost" onclick="_crmPlExtraItems.push({itemName:'',qty:1});renderCRMPackingTab()">+ Add Item</button>
+      </div>
+      ${_crmPlExtraItems.length===0
+        ?`<div style="color:#9ca3af;font-size:.82rem;">No extra items — click "+ Add Item" to include additional items in this packing list.</div>`
+        :_crmPlExtraItems.map((it,i)=>`
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;" id="plExtraRow_${i}">
+          <div style="flex:1;position:relative;">
+            <input type="text" placeholder="Item name…" value="${(it.itemName||'').replace(/"/g,'&quot;')}"
+              oninput="_crmPlExtraItems[${i}].itemName=this.value;_crmPlItemSearch(${i},this.value)"
+              autocomplete="off"
+              style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;">
+            <div id="plExtraDD_${i}" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:6px;z-index:200;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+          </div>
+          <input type="number" min="1" value="${it.qty||1}" placeholder="Qty"
+            oninput="_crmPlExtraItems[${i}].qty=Math.max(1,+this.value||1)"
+            style="width:80px;padding:7px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;text-align:center;">
+          <button onclick="_crmPlExtraItems.splice(${i},1);renderCRMPackingTab()"
+            style="background:none;border:none;color:#ef4444;font-size:1.2rem;cursor:pointer;padding:4px;">✕</button>
+        </div>`).join('')}
+    </div>
+
+    <!-- ── Make Boxes (before dispatch) ── -->
+    <div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:.88rem;font-weight:700;color:#374151;">📦 Make Boxes &amp; Assign Shipping Marks</span>
+        <button class="btn btn-xs btn-ghost" onclick="crmOpenBoxBuilder(null,'create')">
+          ${_crmBxDraft.length?'✏️ Edit Boxes':'+ Define Boxes'}
+        </button>
+      </div>
+      ${_crmBxDraft.length
+        ?`<div style="font-size:.84rem;color:#166534;background:#f0fdf4;border:1px solid #86efac;border-radius:7px;padding:8px 12px;">
+          ✅ ${_crmBxDraft.length} box(es) defined &nbsp;·&nbsp; Marks: B01 – B${String(_crmBxDraft.length).padStart(2,'0')}
+          <span style="margin-left:10px;color:#374151;">${_crmBxDraft.map((b,i)=>`<strong>${i<3?b.shippingMark:''}</strong>`).filter(Boolean).join(' ')}</span>
+        </div>`
+        :`<div style="color:#9ca3af;font-size:.82rem;">Optional — define how items are packed into boxes and assign shipping marks before dispatch.</div>`}
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-ghost" onclick="_crmPlMode='preview';renderCRMPackingTab()">👁️ Preview PL</button>
+      <button class="btn btn-blue" onclick="crmConfirmPackingList('${orderId}')">✅ Confirm Dispatch</button>
+      <button class="btn btn-ghost" onclick="_crmPlMode='list';_crmBxDraft=[];renderCRMPackingTab()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function crmConfirmPackingList(orderId){
+  const date=document.getElementById('crmPlDate')?.value||todayDate();
+  const order=(DB.crmOrders()||[]).find(o=>o.id===orderId);
+  if(!order){ toast('Order not found','error'); return; }
+  const dispItems=[];
+  Object.entries(_crmPlPackItems).forEach(([itemId,qty])=>{
+    if(+qty>0){
+      const it=order.items.find(i=>i.itemId===itemId);
+      if(it) dispItems.push({itemId,itemName:it.itemName,qty:+qty});
+    }
+  });
+  // Sync extra item name fields from DOM before saving
+  _crmPlExtraItems.forEach((it,i)=>{
+    const inp=document.querySelector(`#plExtraRow_${i} input[type=text]`);
+    if(inp) it.itemName=_normStr(inp.value)||it.itemName;
+    const qInp=document.querySelector(`#plExtraRow_${i} input[type=number]`);
+    if(qInp&&qInp.value!=='') it.qty=Math.max(1,+qInp.value||1);
+  });
+  _crmPlExtraItems.filter(it=>it.itemName&&it.qty>0).forEach(it=>{
+    dispItems.push({itemId:it.itemId||'', itemName:_normStr(it.itemName), qty:+it.qty});
+  });
+  if(!dispItems.length){ toast('Add at least one item with qty > 0','error'); return; }
+
+  const plNo=_crmNextPLNo();
+  // Finalise shipping marks now that we know the PL number
+  const finalBoxes=_crmBxDraft.map((b,i)=>({...b, shippingMark:`${plNo}/B${String(i+1).padStart(2,'0')}`}));
+  const pl={
+    id:_crmUID('crmpl_'), plNo, orderId, orderNo:order.orderNo,
+    customerName:order.customerName, date, items:dispItems,
+    boxes:finalBoxes,
+    status:'confirmed', createdBy:session.userId, createdAt:new Date().toISOString(),
+  };
+  const all=DB.crmPackingLists(); all.push(pl); DB.save(K.crmPackingLists,all);
+  _crmBxDraft=[];
+  // Auto-set completionDate if order is now fully dispatched
+  (()=>{
+    const updOrders=DB.crmOrders();
+    const updOrder=updOrders.find(o=>o.id===orderId);
+    if(updOrder&&!updOrder.completionDate){
+      const totalOrdered=(updOrder.items||[]).reduce((s,i)=>s+(i.qty||0),0);
+      const totalDispatched=(DB.crmPackingLists()||[]).filter(p=>p.orderId===orderId&&p.status==='confirmed')
+        .reduce((s,p)=>(p.items||[]).reduce((ss,i)=>ss+i.qty,s),0)+dispItems.reduce((s,i)=>s+i.qty,0);
+      if(totalDispatched>=totalOrdered){ updOrder.completionDate=date; DB.save(K.crmOrders,updOrders); }
+    }
+  })();
+  const totalUnits=dispItems.reduce((s,i)=>s+i.qty,0);
+  toast(`${plNo} confirmed — ${totalUnits} unit(s) dispatched ✅`,'success');
+  _crmPlMode='view'; _crmPlViewId=pl.id;
+  renderCRMPackingTab();
+}
+
+function _crmBoxTableRows(boxes, forPrint){
+  return (boxes||[]).map((b,bi)=>{
+    const items=b.items||[];
+    const totalPcs=items.reduce((s,it)=>s+it.qty,0);
+
+    // Photos — bigger for readability
+    const photos=items.map(it=>{
+      const ph=_crmItemPhoto(it.itemId);
+      if(forPrint){
+        return ph
+          ?`<img src="${ph}" style="width:160px;height:160px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;margin:3px;">`
+          :`<div style="width:160px;height:160px;background:#f1f5f9;border-radius:6px;border:1px dashed #d1d5db;display:inline-flex;align-items:center;justify-content:center;font-size:48px;margin:3px;">📦</div>`;
+      } else {
+        const size=144;
+        return ph
+          ?`<img src="${ph}" style="width:${size}px;height:${size}px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;margin:2px;">`
+          :`<div style="width:${size}px;height:${size}px;background:#f1f5f9;border-radius:6px;border:1px dashed #d1d5db;display:inline-flex;align-items:center;justify-content:center;font-size:44px;margin:2px;">📦</div>`;
+      }
+    }).join('');
+
+    // Item details — clear, readable
+    const itemDetails=items.map(it=>
+      forPrint
+        ?`<div style="font-size:14px;font-weight:600;margin-bottom:5px;color:#1e293b;">${it.itemName} <span style="color:#475569;font-weight:400;">× ${it.qty} pcs</span></div>`
+        :`<div style="font-size:.9rem;font-weight:600;margin-bottom:4px;color:#1e293b;">${it.itemName} <span style="color:#6b7280;font-weight:400;">× ${it.qty} pcs</span></div>`
+    ).join('');
+
+    // Shipping mark — bold, large, clearly visible
+    const markHTML=forPrint
+      ?`<div style="background:#dbeafe;color:#1e40af;padding:8px 14px;border-radius:6px;font-weight:900;font-size:16px;letter-spacing:1px;text-align:center;border:1px solid #93c5fd;">${b.shippingMark}</div>`
+      :`<div style="background:#dbeafe;color:#1e40af;padding:6px 12px;border-radius:6px;font-weight:900;font-size:1rem;letter-spacing:.5px;text-align:center;border:1px solid #93c5fd;white-space:nowrap;">${b.shippingMark}</div>`;
+
+    if(forPrint){
+      return `<tr style="border-bottom:2px solid #e2e8f0;${bi%2===1?'background:#fafafa;':''}">
+        <td style="padding:12px 8px;text-align:center;vertical-align:middle;font-weight:700;font-size:15px;color:#475569;">${bi+1}</td>
+        <td style="padding:12px 8px;text-align:center;vertical-align:middle;"><div style="display:flex;flex-wrap:wrap;gap:3px;justify-content:center;">${photos}</div></td>
+        <td style="padding:12px 16px;vertical-align:middle;">${itemDetails}</td>
+        <td style="padding:12px 14px;text-align:center;vertical-align:middle;font-size:20px;font-weight:900;color:#1e293b;">${totalPcs}</td>
+        <td style="padding:12px 16px;text-align:center;vertical-align:middle;">${markHTML}</td>
+      </tr>`;
+    } else {
+      return `<tr style="border-bottom:1px solid #e5e7eb;">
+        <td style="padding:8px;text-align:center;color:#9ca3af;font-size:.82rem;vertical-align:middle;">${bi+1}</td>
+        <td style="padding:8px;vertical-align:middle;"><div style="display:flex;flex-wrap:wrap;gap:3px;">${photos}</div></td>
+        <td style="padding:10px 12px;vertical-align:middle;">${itemDetails}</td>
+        <td style="padding:10px 12px;text-align:center;font-size:1.1rem;font-weight:800;vertical-align:middle;">${totalPcs}</td>
+        <td style="padding:10px 12px;text-align:center;vertical-align:middle;">${markHTML}</td>
+      </tr>`;
+    }
+  }).join('');
+}
+
+function _crmBoxSummary(boxes, plItems, forPrint){
+  // Build per-item summary: total qty + which marks contain it
+  const itemMap={};
+  // Seed from plItems so all items appear even if some have no boxes
+  (plItems||[]).forEach(it=>{ itemMap[it.itemId]={name:it.itemName,total:0,marks:[]}; });
+  (boxes||[]).forEach(b=>{
+    (b.items||[]).forEach(it=>{
+      if(!itemMap[it.itemId]) itemMap[it.itemId]={name:it.itemName,total:0,marks:[]};
+      itemMap[it.itemId].total+=it.qty;
+      itemMap[it.itemId].marks.push(b.shippingMark);
+    });
+  });
+  const rows=Object.values(itemMap).map(it=>{
+    const markBadges=it.marks.map(m=>
+      forPrint
+        ?`<span style="background:#eff6ff;border:1px solid #93c5fd;color:#1e40af;padding:3px 9px;border-radius:4px;font-size:13px;font-weight:700;margin:2px;display:inline-block;">${m}</span>`
+        :`<span style="background:#eff6ff;border:1px solid #93c5fd;color:#1e40af;padding:3px 9px;border-radius:4px;font-size:.82rem;font-weight:700;margin:2px;display:inline-block;">${m}</span>`
+    ).join('');
+    if(forPrint){
+      return `<tr style="border-bottom:1px solid #e5e7eb;">
+        <td style="padding:10px 14px;font-weight:700;font-size:15px;color:#1e293b;">${it.name}</td>
+        <td style="padding:10px 14px;text-align:center;font-size:18px;font-weight:900;color:#1e293b;">${it.total} pcs</td>
+        <td style="padding:10px 14px;">${markBadges}</td>
+      </tr>`;
+    } else {
+      return `<tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px 12px;font-weight:700;font-size:.92rem;color:#1e293b;">${it.name}</td>
+        <td style="padding:8px 12px;text-align:center;font-size:1rem;font-weight:800;">${it.total} pcs</td>
+        <td style="padding:8px 12px;">${markBadges}</td>
+      </tr>`;
+    }
+  }).join('');
+  return rows;
+}
+
+function _crmPackViewHTML(plId){
+  const pl=(DB.crmPackingLists()||[]).find(p=>p.id===plId);
+  if(!pl) return `<div style="padding:24px;"><button class="btn btn-ghost" onclick="_crmPlMode='list';renderCRMPackingTab()">&#x2190; Back</button><p style="margin-top:12px;">Not found.</p></div>`;
+  const totalQty=(pl.items||[]).reduce((s,i)=>s+i.qty,0);
+  const createdByName=(DB.users()||[]).find(u=>u.id===pl.createdBy)?.username||pl.createdBy||'&#x2014;';
+  const boxes=pl.boxes||[];
+  const hasBoxes=boxes.length>0;
+
+  const metaBar=`<div style="padding:12px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.88rem;">
+    <div><span style="color:#6b7280;">Order No:</span> <strong>${pl.orderNo}</strong></div>
+    <div><span style="color:#6b7280;">Customer:</span> <strong>${pl.customerName}</strong></div>
+    <div><span style="color:#6b7280;">Date:</span> <strong>${pl.date}</strong></div>
+    <div><span style="color:#6b7280;">Total Units:</span> <strong>${totalQty}</strong></div>
+  </div>`;
+
+  let mainContent;
+  if(hasBoxes){
+    mainContent=`
+      <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:.88rem;">
+        <thead><tr style="background:#253358;color:#fff;">
+          <th style="padding:9px 8px;width:32px;">#</th>
+          <th style="padding:9px 8px;text-align:center;width:100px;">Images</th>
+          <th style="padding:9px 14px;text-align:left;">Items &amp; Quantity</th>
+          <th style="padding:9px 10px;text-align:center;width:70px;">Total</th>
+          <th style="padding:9px 14px;text-align:center;">Shipping Mark</th>
+        </tr></thead>
+        <tbody>${_crmBoxTableRows(boxes,false)}</tbody>
+        <tfoot><tr style="background:#f8fafc;font-weight:700;border-top:2px solid #e5e7eb;">
+          <td colspan="3" style="padding:10px 14px;">Total Units (all boxes)</td>
+          <td style="padding:10px 14px;text-align:center;">${totalQty}</td>
+          <td></td>
+        </tr></tfoot>
+      </table>
+      </div>
+      <div style="margin-top:20px;">
+        <div style="font-size:.82rem;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding:0 4px;">Item Summary</div>
+        <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+          <thead><tr style="background:#f8fafc;">
+            <th style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>
+            <th style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Total Qty</th>
+            <th style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Shipping Marks</th>
+          </tr></thead>
+          <tbody>${_crmBoxSummary(boxes,pl.items,false)}</tbody>
+        </table>
+      </div>`;
+  } else {
+    mainContent=`<table style="width:100%;border-collapse:collapse;font-size:.88rem;">
+      <thead><tr style="background:#f1f5f9;">
+        <th style="padding:9px 8px;border-bottom:1px solid #e5e7eb;width:56px;"></th>
+        <th style="padding:9px 14px;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>
+        <th style="padding:9px 14px;border-bottom:1px solid #e5e7eb;text-align:center;">Qty</th>
+      </tr></thead>
+      <tbody>
+      ${(pl.items||[]).map(i=>{const photo=_crmItemPhoto(i.itemId);return`<tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:7px 8px;">${_crmImgTag(photo,44)}</td>
+        <td style="padding:9px 14px;">${i.itemName}</td>
+        <td style="padding:9px 14px;text-align:center;font-weight:600;">${i.qty}</td>
+      </tr>`;}).join('')}
+      <tr style="background:#f8fafc;font-weight:700;border-top:2px solid #e5e7eb;">
+        <td colspan="2" style="padding:10px 14px;">Total Units</td>
+        <td style="padding:10px 14px;text-align:center;">${totalQty}</td>
+      </tr>
+      </tbody>
+    </table>`;
+  }
+
+  return `<div style="padding:16px;max-width:760px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-ghost" onclick="_crmPlMode='list';renderCRMPackingTab()">&#x2190; Back</button>
+        <h3 style="margin:0;">${pl.plNo}</h3>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" onclick="crmOpenBoxBuilder('${pl.id}','view')">&#x1F4E6; ${hasBoxes?'Add Boxes':'Make Boxes'}</button>
+        <button class="btn btn-ghost" onclick="crmPrintPL('${pl.id}')">&#x1F5A8;&#xFE0F; Print</button>
+        ${session.role==='admin'?`<button class="btn btn-ghost" style="color:#dc2626;" onclick="crmDeletePackingList('${pl.id}')">&#x1F5D1;&#xFE0F; Delete</button>`:''}
+      </div>
+    </div>
+    <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+      <div style="background:#253358;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:1.1rem;font-weight:700;letter-spacing:.5px;">PACKING LIST</div>
+          <div style="font-size:.82rem;opacity:.8;">${pl.plNo} · ${pl.date}</div>
+        </div>
+        ${hasBoxes?`<span style="background:rgba(255,255,255,.18);padding:4px 12px;border-radius:6px;font-size:.8rem;font-weight:600;">&#x1F4E6; ${boxes.length} Boxes</span>`:''}
+      </div>
+      ${metaBar}
+      <div style="padding:14px;">
+        ${mainContent}
+      </div>
+      <div style="padding:12px 18px;font-size:.78rem;color:#9ca3af;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;">
+        <span>Created by: ${createdByName}</span>
+        <span>${new Date(pl.createdAt).toLocaleString('en-IN')}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _crmPackPreviewHTML(orderId){
+  // Build virtual PL from current draft state for preview before dispatch
+  const order=(DB.crmOrders()||[]).find(o=>o.id===orderId);
+  if(!order) return `<p>Order not found.</p>`;
+  const dispItems=[];
+  Object.entries(_crmPlPackItems).forEach(([itemId,qty])=>{
+    if(+qty>0){
+      const it=order.items.find(i=>i.itemId===itemId);
+      if(it) dispItems.push({itemId,itemName:it.itemName,qty:+qty});
+    }
+  });
+  _crmPlExtraItems.filter(it=>it.itemName&&it.qty>0).forEach(it=>{
+    dispItems.push({itemId:it.itemId||'',itemName:it.itemName,qty:+it.qty});
+  });
+  const totalQty=dispItems.reduce((s,i)=>s+i.qty,0);
+  const boxes=_crmBxDraft;
+  const hasBoxes=boxes.length>0;
+
+  let mainContent;
+  if(hasBoxes){
+    mainContent=`
+      <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:.88rem;">
+        <thead><tr style="background:#253358;color:#fff;">
+          <th style="padding:9px 8px;width:32px;">#</th>
+          <th style="padding:9px 8px;text-align:center;width:100px;">Images</th>
+          <th style="padding:9px 14px;text-align:left;">Items &amp; Quantity</th>
+          <th style="padding:9px 10px;text-align:center;width:70px;">Total</th>
+          <th style="padding:9px 14px;text-align:center;">Shipping Mark</th>
+        </tr></thead>
+        <tbody>${_crmBoxTableRows(boxes,false)}</tbody>
+        <tfoot><tr style="background:#f8fafc;font-weight:700;border-top:2px solid #e5e7eb;">
+          <td colspan="3" style="padding:10px 14px;">Total Units (all boxes)</td>
+          <td style="padding:10px 14px;text-align:center;">${totalQty}</td>
+          <td></td>
+        </tr></tfoot>
+      </table>
+      </div>
+      <div style="margin-top:20px;">
+        <div style="font-size:.82rem;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Item Summary</div>
+        <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+          <thead><tr style="background:#f8fafc;">
+            <th style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>
+            <th style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Total Qty</th>
+            <th style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Shipping Marks</th>
+          </tr></thead>
+          <tbody>${_crmBoxSummary(boxes,dispItems,false)}</tbody>
+        </table>
+      </div>`;
+  } else {
+    mainContent=`<table style="width:100%;border-collapse:collapse;font-size:.88rem;">
+      <thead><tr style="background:#f1f5f9;">
+        <th style="padding:9px 8px;border-bottom:1px solid #e5e7eb;width:56px;"></th>
+        <th style="padding:9px 14px;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>
+        <th style="padding:9px 14px;border-bottom:1px solid #e5e7eb;text-align:center;">Qty</th>
+      </tr></thead>
+      <tbody>
+      ${dispItems.map(i=>{const photo=_crmItemPhoto(i.itemId);return`<tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:7px 8px;">${_crmImgTag(photo,44)}</td>
+        <td style="padding:9px 14px;">${i.itemName}</td>
+        <td style="padding:9px 14px;text-align:center;font-weight:600;">${i.qty}</td>
+      </tr>`;}).join('')}
+      <tr style="background:#f8fafc;font-weight:700;border-top:2px solid #e5e7eb;">
+        <td colspan="2" style="padding:10px 14px;">Total Units</td>
+        <td style="padding:10px 14px;text-align:center;">${totalQty}</td>
+      </tr>
+      </tbody>
+    </table>`;
+  }
+
+  return `<div style="padding:16px;max-width:760px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+      <button class="btn btn-ghost" onclick="_crmPlMode='create';renderCRMPackingTab()">&#x2190; Back to Create</button>
+      <h3 style="margin:0;">Preview — Packing List</h3>
+      <span style="background:#fde68a;color:#92400e;padding:3px 10px;border-radius:5px;font-size:.78rem;font-weight:700;">PREVIEW</span>
+    </div>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:.84rem;color:#92400e;">
+      This is a preview only. Shipping marks will be assigned (DRAFT → PL-XXX/B01 etc.) when you confirm dispatch.
+    </div>
+    <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+      <div style="background:#253358;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:1.1rem;font-weight:700;letter-spacing:.5px;">PACKING LIST</div>
+          <div style="font-size:.82rem;opacity:.8;">${order.orderNo} · ${order.customerName}</div>
+        </div>
+        ${hasBoxes?`<span style="background:rgba(255,255,255,.18);padding:4px 12px;border-radius:6px;font-size:.8rem;font-weight:600;">&#x1F4E6; ${boxes.length} Boxes</span>`:''}
+      </div>
+      <div style="padding:12px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.88rem;">
+        <div><span style="color:#6b7280;">Order No:</span> <strong>${order.orderNo}</strong></div>
+        <div><span style="color:#6b7280;">Customer:</span> <strong>${order.customerName}</strong></div>
+        <div><span style="color:#6b7280;">Total Units:</span> <strong>${totalQty}</strong></div>
+      </div>
+      <div style="padding:14px;">${mainContent}</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="btn btn-blue" onclick="crmConfirmPackingList('${orderId}')">&#x2705; Confirm Dispatch</button>
+      <button class="btn btn-ghost" onclick="_crmPlMode='create';renderCRMPackingTab()">&#x2190; Back to Edit</button>
+    </div>
+  </div>`;
+}
+
+function crmPrintPL(plId){
+  const pl=(DB.crmPackingLists()||[]).find(p=>p.id===plId); if(!pl) return;
+  const totalQty=(pl.items||[]).reduce((s,i)=>s+i.qty,0);
+  const boxes=pl.boxes||[];
+  const hasBoxes=boxes.length>0;
+
+  const metaBlock=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;font-size:13px;">
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;">
+        <div style="color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.5px;margin-bottom:3px;">ORDER NO</div>
+        <div style="font-weight:700;color:#1e293b;">${pl.orderNo}</div>
+      </div>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;">
+        <div style="color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.5px;margin-bottom:3px;">CUSTOMER</div>
+        <div style="font-weight:700;color:#1e293b;">${pl.customerName}</div>
+      </div>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;">
+        <div style="color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.5px;margin-bottom:3px;">DISPATCH DATE</div>
+        <div style="font-weight:700;color:#1e293b;">${pl.date}</div>
+      </div>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;">
+        <div style="color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.5px;margin-bottom:3px;">TOTAL UNITS</div>
+        <div style="font-weight:700;color:#1e293b;">${totalQty}${hasBoxes?` (${boxes.length} boxes)`:''}</div>
+      </div>
+    </div>`;
+
+  let tableBlock;
+  if(hasBoxes){
+    tableBlock=`
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px;">
+        <thead><tr style="background:#253358;color:#fff;">
+          <th style="padding:10px 8px;text-align:center;width:32px;">#</th>
+          <th style="padding:10px 8px;text-align:center;width:110px;">Images</th>
+          <th style="padding:10px 14px;text-align:left;">Items &amp; Quantity</th>
+          <th style="padding:10px 10px;text-align:center;width:70px;">Total</th>
+          <th style="padding:10px 14px;text-align:center;">Shipping Mark</th>
+        </tr></thead>
+        <tbody>${_crmBoxTableRows(boxes,true)}</tbody>
+        <tfoot><tr style="background:#f1f5f9;font-weight:700;border-top:2px solid #253358;">
+          <td colspan="3" style="padding:10px 14px;font-size:13px;">Total Units (all boxes)</td>
+          <td style="padding:10px 14px;text-align:center;font-size:15px;">${totalQty}</td>
+          <td></td>
+        </tr></tfoot>
+      </table>
+      <div style="margin-bottom:24px;">
+        <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">ITEM SUMMARY</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+          <thead><tr style="background:#f8fafc;">
+            <th style="padding:7px 12px;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>
+            <th style="padding:7px 12px;border-bottom:1px solid #e5e7eb;text-align:center;width:80px;">Total Qty</th>
+            <th style="padding:7px 12px;border-bottom:1px solid #e5e7eb;text-align:left;">Shipping Marks</th>
+          </tr></thead>
+          <tbody>${_crmBoxSummary(boxes,pl.items,true)}</tbody>
+        </table>
+      </div>`;
+  } else {
+    const itemRows=(pl.items||[]).map(i=>{
+      const photo=_crmItemPhoto(i.itemId);
+      const imgHtml=photo
+        ?`<img src="${photo}" style="width:60px;height:60px;object-fit:cover;border-radius:4px;border:1px solid #e5e7eb;">`
+        :`<div style="width:60px;height:60px;background:#f1f5f9;border-radius:4px;border:1px dashed #d1d5db;display:flex;align-items:center;justify-content:center;font-size:24px;">📦</div>`;
+      return `<tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:10px 14px;text-align:center;">${imgHtml}</td>
+        <td style="padding:10px 14px;font-size:14px;">${i.itemName}</td>
+        <td style="padding:10px 14px;text-align:center;font-size:15px;font-weight:700;">${i.qty}</td>
+      </tr>`;
+    }).join('');
+    tableBlock=`
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px;">
+        <thead><tr style="background:#253358;color:#fff;">
+          <th style="padding:10px 14px;width:80px;text-align:center;">Image</th>
+          <th style="padding:10px 14px;text-align:left;">Item Name</th>
+          <th style="padding:10px 14px;text-align:center;width:80px;">Qty</th>
+        </tr></thead>
+        <tbody>${itemRows}</tbody>
+        <tfoot><tr style="background:#f1f5f9;font-weight:700;border-top:2px solid #253358;">
+          <td colspan="2" style="padding:10px 14px;">Total Units</td>
+          <td style="padding:10px 14px;text-align:center;">${totalQty}</td>
+        </tr></tfoot>
+      </table>`;
+  }
+
+  const html=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;border-bottom:3px solid #253358;padding-bottom:16px;">
+      <div>${_NIIC_LOGO_SVG}</div>
+      <div style="text-align:right;">
+        <div style="font-size:22px;font-weight:800;color:#253358;letter-spacing:1px;">PACKING LIST</div>
+        <div style="font-size:13px;color:#64748b;margin-top:4px;">${pl.plNo}</div>
+      </div>
+    </div>
+    ${metaBlock}
+    ${tableBlock}
+    <div style="margin-top:40px;display:flex;justify-content:space-between;font-size:12px;color:#64748b;">
+      <div><div style="border-top:1px solid #94a3b8;padding-top:6px;width:160px;text-align:center;">Prepared by</div></div>
+      <div><div style="border-top:1px solid #94a3b8;padding-top:6px;width:160px;text-align:center;">Authorized Signatory</div></div>
+    </div>`;
+  _niicPrint(`Packing List ${pl.plNo}`, html);
+}
+
+
+// ── BOX BUILDER ───────────────────────────────────────────────────────────────
+
+// mode: 'create' = before dispatch (uses _crmPlPackItems), 'view' = existing confirmed PL
+function crmOpenBoxBuilder(plId, mode){
+  _crmBxReturnTo = mode||'view';
+  if(_crmBxReturnTo==='create'){
+    const order=(DB.crmOrders()||[]).find(o=>o.id===_crmPlOrderId);
+    const allItems=[];
+    (order?.items||[]).forEach(it=>{
+      const qty=+(_crmPlPackItems[it.itemId]||0);
+      if(qty>0) allItems.push({itemId:it.itemId,itemName:it.itemName,qty:0,maxQty:qty});
+    });
+    _crmPlExtraItems.forEach((it,i)=>{
+      if(it.itemName&&it.qty>0) allItems.push({itemId:`extra_${i}`,itemName:it.itemName,qty:0,maxQty:+it.qty});
+    });
+    if(!allItems.length){ toast('Enter dispatch quantities first before defining boxes.','error'); return; }
+    _crmBxConfigs=[{items:allItems,count:1}];
+  } else {
+    const pl=(DB.crmPackingLists()||[]).find(p=>p.id===plId);
+    if(!pl) return;
+    _crmPlViewId=plId;
+    const usedInBoxes={};
+    (pl.boxes||[]).forEach(b=>(b.items||[]).forEach(it=>{ usedInBoxes[it.itemId]=(usedInBoxes[it.itemId]||0)+it.qty; }));
+    const items=(pl.items||[]).map(i=>{
+      const rem=i.qty-(usedInBoxes[i.itemId]||0);
+      return {itemId:i.itemId,itemName:i.itemName,qty:0,maxQty:Math.max(0,rem)};
+    }).filter(i=>i.maxQty>0);
+    if(!items.length){ toast('All items are already fully packed into boxes.','error'); return; }
+    _crmBxConfigs=[{items,count:1}];
+  }
+  _crmPlMode='boxes';
+  renderCRMPackingTab();
+}
+
+function _crmBoxBuilderHTML(plId){
+  let plLabel='', existing=[], allItems=[];
+  if(_crmBxReturnTo==='create'){
+    const order=(DB.crmOrders()||[]).find(o=>o.id===_crmPlOrderId);
+    plLabel=order?`${order.orderNo} · ${order.customerName}`:'New Packing List';
+    existing=_crmBxDraft;
+    (order?.items||[]).forEach(it=>{
+      const qty=+(_crmPlPackItems[it.itemId]||0);
+      if(qty>0) allItems.push({itemId:it.itemId,itemName:it.itemName,maxQty:qty});
+    });
+    _crmPlExtraItems.forEach((it,i)=>{
+      if(it.itemName&&it.qty>0) allItems.push({itemId:`extra_${i}`,itemName:it.itemName,maxQty:+it.qty});
+    });
+  } else {
+    const pl=(DB.crmPackingLists()||[]).find(p=>p.id===plId);
+    if(!pl) return `<div style="padding:24px;"><button class="btn btn-ghost" onclick="_crmPlMode='list';renderCRMPackingTab()">&#x2190; Back</button><p>PL not found.</p></div>`;
+    plLabel=pl.plNo;
+    existing=pl.boxes||[];
+    allItems=(pl.items||[]).map(i=>({itemId:i.itemId,itemName:i.itemName,maxQty:i.qty}));
+  }
+
+  // Total used per item across current configs (template qty * count)
+  const usedMap={};
+  _crmBxConfigs.forEach(cfg=>{
+    cfg.items.forEach(it=>{ usedMap[it.itemId]=(usedMap[it.itemId]||0)+(it.qty*cfg.count); });
+  });
+  // Already committed in existing boxes
+  const existingUsed={};
+  existing.forEach(b=>(b.items||[]).forEach(it=>{ existingUsed[it.itemId]=(existingUsed[it.itemId]||0)+it.qty; }));
+
+  // Remaining per item = maxQty - existingUsed - usedMap
+  const remainingMap={};
+  allItems.forEach(it=>{
+    remainingMap[it.itemId]=it.maxQty-(existingUsed[it.itemId]||0)-(usedMap[it.itemId]||0);
+  });
+
+  const existingHTML=existing.length?`
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h4 style="margin:0;font-size:.93rem;">✅ ${existing.length} Box(es) Defined</h4>
+        <button class="btn btn-xs btn-ghost" style="color:#dc2626;" onclick="${_crmBxReturnTo==='create'?'_crmBxDraft=[];renderCRMPackingTab()':session.role==='admin'?`crmClearBoxes('${plId}')`:'' }">Clear All</button>
+      </div>
+      <div style="overflow-x:auto;margin-bottom:10px;">
+        <table style="width:100%;border-collapse:collapse;font-size:.84rem;">
+          <thead><tr style="background:#f8fafc;">
+            <th style="padding:7px 10px;border-bottom:1px solid #e5e7eb;">#</th>
+            <th style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Shipping Mark</th>
+            <th style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">Contents</th>
+            <th style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">Pcs</th>
+          </tr></thead>
+          <tbody>
+          ${existing.map((b,i)=>`<tr style="border-bottom:1px solid #f1f5f9;">
+            <td style="padding:7px 10px;color:#6b7280;">${i+1}</td>
+            <td style="padding:7px 10px;"><span style="background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:5px;font-weight:700;font-size:.82rem;letter-spacing:.5px;">${b.shippingMark}</span></td>
+            <td style="padding:7px 10px;font-size:.81rem;color:#374151;">${(b.items||[]).map(it=>`${it.itemName}: <strong>${it.qty}</strong>`).join(' &nbsp;·&nbsp; ')}</td>
+            <td style="padding:7px 10px;text-align:center;font-weight:700;">${(b.items||[]).reduce((s,it)=>s+it.qty,0)}</td>
+          </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${_crmBxReturnTo==='view'?`<button class="btn btn-ghost" style="font-size:.83rem;" onclick="crmPrintBoxLabels('${plId}')">&#x1F5A8;&#xFE0F; Print All Box Labels</button>`:''}
+    </div>
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin-bottom:20px;">
+    <h4 style="margin:0 0 12px;font-size:.9rem;">➕ Add More Boxes</h4>`
+  : `<h4 style="margin:0 0 12px;font-size:.9rem;">Define Box Contents</h4>`;
+
+  const configRows=_crmBxConfigs.map((cfg,ci)=>{
+    const itemRows=cfg.items.map((it,ii)=>{
+      const itemMax=allItems.find(a=>a.itemId===it.itemId)?.maxQty||0;
+      const otherConfigs=usedMap[it.itemId]-(it.qty*cfg.count);
+      const alreadyInExisting=existingUsed[it.itemId]||0;
+      const totalForThisItem=it.qty*cfg.count;
+      const totalUsedIncl=alreadyInExisting+otherConfigs+totalForThisItem;
+      const overLimit=totalUsedIncl>itemMax;
+      const remForThis=itemMax-alreadyInExisting-otherConfigs;
+      return `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+          <span style="flex:1;font-size:.85rem;">${it.itemName}</span>
+          <span style="font-size:.75rem;color:#9ca3af;white-space:nowrap;">per box</span>
+          <input type="number" value="${it.qty}" min="0" placeholder="0"
+            oninput="_crmBxConfigs[${ci}].items[${ii}].qty=Math.max(0,+this.value||0);renderCRMPackingTab()"
+            style="width:72px;padding:5px 8px;border:1px solid ${overLimit?'#ef4444':'#d1d5db'};border-radius:6px;font-size:.85rem;text-align:center;${overLimit?'background:#fef2f2;':''}">
+          <span style="font-size:.75rem;white-space:nowrap;${overLimit?'color:#dc2626;font-weight:700;':'color:#6b7280;'}">
+            ${overLimit?'⚠️ exceeds limit':`${Math.max(0,remForThis-totalForThisItem)} left`}
+          </span>
+        </div>`;
+    }).join('');
+    return `
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <span style="font-weight:600;font-size:.88rem;color:#374151;">Box Template ${ci+1}</span>
+        ${_crmBxConfigs.length>1?`<button onclick="_crmBxConfigs.splice(${ci},1);renderCRMPackingTab()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;line-height:1;">✕</button>`:''}
+      </div>
+      <div style="margin-bottom:12px;">${itemRows}</div>
+      <div style="display:flex;align-items:center;gap:10px;border-top:1px solid #e5e7eb;padding-top:10px;">
+        <span style="font-size:.85rem;color:#374151;">Make</span>
+        <input type="number" value="${cfg.count}" min="1"
+          oninput="_crmBxConfigs[${ci}].count=Math.max(1,+this.value||1);renderCRMPackingTab()"
+          style="width:70px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;text-align:center;">
+        <span style="font-size:.85rem;color:#374151;">box(es) of this type</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  const summaryItems=allItems.map(it=>{
+    const rem=remainingMap[it.itemId]||0;
+    return `<span style="margin-right:14px;${rem<0?'color:#dc2626;font-weight:700;':rem===0&&(existingUsed[it.itemId]||0)+(usedMap[it.itemId]||0)>0?'color:#059669;font-weight:700;':'color:#374151;'}">${it.itemName}: <strong>${rem}</strong> left</span>`;
+  }).join('');
+
+  const hasOverLimit=allItems.some(it=>remainingMap[it.itemId]<0);
+  const backAction=_crmBxReturnTo==='create'?`_crmPlMode='create';renderCRMPackingTab()`:`_crmPlMode='view';renderCRMPackingTab()`;
+  const allItemsJSON=JSON.stringify(allItems.map(i=>({...i,qty:0})));
+
+  return `<div style="padding:16px;max-width:700px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <button class="btn btn-ghost" onclick="${backAction}">← Back</button>
+      <h3 style="margin:0;">📦 Make Boxes — ${plLabel}</h3>
+    </div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 16px;margin-bottom:12px;font-size:.84rem;">
+      <strong>Dispatch quantities available for boxing:</strong><br>
+      ${allItems.map(i=>`<span style="margin-right:16px;">${i.itemName}: <strong>${i.maxQty}</strong></span>`).join('')}
+    </div>
+    ${hasOverLimit?`<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:.84rem;color:#dc2626;font-weight:600;">⚠️ Total box quantities exceed available — reduce before generating.</div>`:''}
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 14px;margin-bottom:18px;font-size:.82rem;">${summaryItems||'<span style="color:#9ca3af;">Fill in quantities below to see balance</span>'}</div>
+    ${existingHTML}
+    ${configRows}
+    <button class="btn btn-ghost" style="margin-bottom:16px;" onclick="_crmBxConfigs.push({items:${allItemsJSON},count:1});renderCRMPackingTab()">+ Add Another Box Type</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-blue" onclick="crmGenerateBoxes('${plId||''}')">&#x1F4E6; Generate Boxes</button>
+      <button class="btn btn-ghost" onclick="${backAction}">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function crmGenerateBoxes(plId){
+  for(let ci=0;ci<_crmBxConfigs.length;ci++){
+    const cfg=_crmBxConfigs[ci];
+    if(!cfg.items.some(it=>it.qty>0)){ toast(`Box Template ${ci+1}: add at least one item with qty > 0.`,'error'); return; }
+    if(cfg.count<1){ toast(`Box Template ${ci+1}: count must be at least 1.`,'error'); return; }
+  }
+
+  // Build max qty map
+  let maxQtyMap={};
+  if(_crmBxReturnTo==='create'){
+    const order=(DB.crmOrders()||[]).find(o=>o.id===_crmPlOrderId);
+    (order?.items||[]).forEach(it=>{ maxQtyMap[it.itemId]=+(_crmPlPackItems[it.itemId]||0); });
+    _crmPlExtraItems.forEach((it,i)=>{ if(it.qty>0) maxQtyMap[`extra_${i}`]=+it.qty; });
+  } else {
+    const pl=(DB.crmPackingLists()||[]).find(p=>p.id===plId);
+    if(!pl){ toast('PL not found','error'); return; }
+    (pl.items||[]).forEach(it=>{ maxQtyMap[it.itemId]=it.qty; });
+    // Subtract already-boxed quantities
+    const existingUsed={};
+    (pl.boxes||[]).forEach(b=>(b.items||[]).forEach(it=>{ existingUsed[it.itemId]=(existingUsed[it.itemId]||0)+it.qty; }));
+    Object.keys(maxQtyMap).forEach(k=>{ maxQtyMap[k]=maxQtyMap[k]-(existingUsed[k]||0); });
+  }
+
+  // Validate total across all configs * count <= available
+  const totalUsed={};
+  _crmBxConfigs.forEach(cfg=>{
+    cfg.items.forEach(it=>{ totalUsed[it.itemId]=(totalUsed[it.itemId]||0)+(it.qty*cfg.count); });
+  });
+  for(const [itemId,used] of Object.entries(totalUsed)){
+    const avail=maxQtyMap[itemId]||0;
+    if(used>avail){
+      const name=_crmBxConfigs.flatMap(c=>c.items).find(i=>i.itemId===itemId)?.itemName||itemId;
+      toast(`"${name}": total used in boxes (${used}) exceeds available (${avail}).`,'error');
+      return;
+    }
+  }
+
+  // Generate individual box records
+  const newBoxes=[];
+  let n=1;
+  _crmBxConfigs.forEach(cfg=>{
+    for(let b=0;b<cfg.count;b++){
+      newBoxes.push({
+        id:_crmUID('box_'),
+        shippingMark:`DRAFT/B${String(n).padStart(2,'0')}`,
+        items:cfg.items.filter(it=>it.qty>0).map(it=>({itemId:it.itemId,itemName:it.itemName,qty:it.qty}))
+      });
+      n++;
+    }
+  });
+
+  if(_crmBxReturnTo==='create'){
+    _crmBxDraft=[..._crmBxDraft,...newBoxes];
+    toast(`${newBoxes.length} box(es) defined ✅ — shipping marks finalised on dispatch`,'success');
+    _crmPlMode='create';
+  } else {
+    const all=DB.crmPackingLists();
+    const idx=all.findIndex(p=>p.id===plId);
+    const startNo=(all[idx].boxes||[]).length+1;
+    newBoxes.forEach((b,i)=>{ b.shippingMark=`${all[idx].plNo}/B${String(startNo+i).padStart(2,'0')}`; });
+    all[idx].boxes=[...(all[idx].boxes||[]),...newBoxes];
+    DB.save(K.crmPackingLists,all);
+    toast(`${newBoxes.length} box(es) generated ✅`,'success');
+    _crmPlMode='view';
+  }
+  renderCRMPackingTab();
+}
+
+function crmClearBoxes(plId){
+  if(session.role!=='admin'){ toast('Only admins can clear boxes.','error'); return; }
+  if(!confirm('Remove all boxes from this packing list? This cannot be undone.')) return;
+  const all=DB.crmPackingLists();
+  const idx=all.findIndex(p=>p.id===plId);
+  all[idx].boxes=[];
+  DB.save(K.crmPackingLists,all);
+  toast('All boxes cleared.','success');
+  _crmPlMode='view';
+  renderCRMPackingTab();
+}
+
+
+// ── end CRM module ─────────────────────────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EXCEL MASTER DATA IMPORT / EXPORT
+// ══════════════════════════════════════════════════════════════════════════════
+
+function downloadMasterTemplate() {
+  if (!window.XLSX) return toast('SheetJS not loaded yet — please wait and retry.','error');
+  const wb=XLSX.utils.book_new();
+
+  // Sheet 1: Employees
+  const empHeaders=[['EmpID (leave blank = auto)','Name *','Phone','Designation','Date of Joining (YYYY-MM-DD)','Salary Type (monthly/daily/piece)','Salary Amount','Status (active/inactive)']];
+  const empSample=[['','John Doe','9876543210','Tailor','2024-01-15','monthly','15000','active']];
+  const wsEmp=XLSX.utils.aoa_to_sheet([...empHeaders,...empSample]);
+  wsEmp['!cols']=[{wch:22},{wch:18},{wch:14},{wch:16},{wch:24},{wch:28},{wch:14},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,wsEmp,'Employees');
+
+  // Sheet 2: Workstations
+  const wstHeaders=[['Workstation Name *','Workstation Code (leave blank = auto)','Status (active/inactive)']];
+  const wstSample=[['Cutting Section','WST-01','active'],['Stitching Section','','active']];
+  const wsWst=XLSX.utils.aoa_to_sheet([...wstHeaders,...wstSample]);
+  wsWst['!cols']=[{wch:24},{wch:28},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,wsWst,'Workstations');
+
+  // Sheet 3: Operations
+  const opHeaders=[['Operation Name *','Workstation Name * (must match Workstations sheet or existing)','Status (active/inactive)']];
+  const opSample=[['Cutting','Cutting Section','active'],['Overlock','Stitching Section','active'],['Button Attach','Stitching Section','active']];
+  const wsOp=XLSX.utils.aoa_to_sheet([...opHeaders,...opSample]);
+  wsOp['!cols']=[{wch:22},{wch:36},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,wsOp,'Operations');
+
+  // Sheet 4: FG Items
+  const fgHeaders=[['Item Name *','Item Code (leave blank = auto)','Unit (PCS/SET/DZ)','Description','Status (active/inactive)']];
+  const fgSample=[['Formal Shirt','FG-001','PCS','Full sleeve formal shirt','active'],['Casual T-Shirt','','PCS','Round neck casual','active']];
+  const wsFg=XLSX.utils.aoa_to_sheet([...fgHeaders,...fgSample]);
+  wsFg['!cols']=[{wch:22},{wch:22},{wch:12},{wch:30},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,wsFg,'FG Items');
+
+  // Sheet 5: Instructions
+  const instrData=[
+    ['NIIC ERP — Master Data Import Template'],
+    [''],
+    ['INSTRUCTIONS'],
+    ['1. Fill data in the respective sheets (Employees, Workstations, Operations, FG Items).'],
+    ['2. Do NOT change column headers — they must match exactly.'],
+    ['3. Fields marked with * are required. Others are optional.'],
+    ['4. For Employees: leave EmpID blank to auto-generate.'],
+    ['5. For Workstations: leave Code blank to auto-generate.'],
+    ['6. Operations must reference a Workstation Name that exists in the Workstations sheet or is already saved in the system.'],
+    ['7. Duplicate names are skipped (existing record is kept).'],
+    ['8. Delete the sample rows before importing.'],
+    [''],
+    ['Date format: YYYY-MM-DD (e.g. 2024-01-15)'],
+    ['Salary Type: monthly | daily | piece'],
+    ['Status: active | inactive'],
+    ['Unit (FG Items): PCS | SET | DZ | PAIR'],
+  ];
+  const wsInstr=XLSX.utils.aoa_to_sheet(instrData);
+  wsInstr['!cols']=[{wch:80}];
+  XLSX.utils.book_append_sheet(wb,wsInstr,'Instructions');
+
+  XLSX.writeFile(wb,'NIIC_Master_Data_Template.xlsx');
+  toast('Template downloaded!','success');
+}
+
+function masterImportFromExcel() {
+  const modal=document.getElementById('modalMasterImport');
+  if (!modal) return;
+  document.getElementById('masterImportFile').value='';
+  document.getElementById('masterImportFileName').textContent='';
+  document.getElementById('masterImportPreview').style.display='none';
+  document.getElementById('btnDoMasterImport').style.display='none';
+  modal.style.display='flex';
+}
+
+function _mipToDateStr(val) {
+  if (!val) return '';
+  if (typeof val==='number') {
+    // Excel serial date
+    const d=XLSX.SSF.parse_date_code(val);
+    if (!d) return '';
+    const mm=String(d.m).padStart(2,'0'), dd=String(d.d).padStart(2,'0');
+    return `${d.y}-${mm}-${dd}`;
+  }
+  const s=String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const dt=new Date(s);
+  if (!isNaN(dt)) return dt.toISOString().split('T')[0];
+  return s;
+}
+
+function _onMasterFileChange(input) {
+  const file=input.files[0];
+  if (!file) return;
+  document.getElementById('masterImportFileName').textContent=file.name;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try {
+      if (!window.XLSX) return toast('SheetJS not loaded.','error');
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:false});
+      _previewMasterImport(wb);
+    } catch(err) {
+      toast('Could not read file: '+err.message,'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function _previewMasterImport(wb) {
+  window._mipWb=wb;
+  const counts={};
+  const sheetMap={employees:'Employees',workstations:'Workstations',operations:'Operations',fg:'FG Items'};
+  Object.entries(sheetMap).forEach(([key,shName])=>{
+    const ws=wb.Sheets[shName];
+    if (!ws) { counts[key]=0; return; }
+    const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+    counts[key]=rows.filter(r=>Object.values(r).some(v=>String(v||'').trim())).length;
+  });
+  const previewDiv=document.getElementById('masterImportPreview');
+  previewDiv.innerHTML=`
+    <div style="font-weight:700;color:#16a34a;margin-bottom:8px;">📊 File Preview</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.83rem;">
+      <div>👥 Employees: <strong>${counts.employees}</strong> rows</div>
+      <div>🏭 Workstations: <strong>${counts.workstations}</strong> rows</div>
+      <div>⚙️ Operations: <strong>${counts.operations}</strong> rows</div>
+      <div>📦 FG Items: <strong>${counts.fg}</strong> rows</div>
+    </div>
+    <div style="margin-top:8px;font-size:.78rem;color:#555;">Existing records with matching names will be skipped. New records will be added.</div>`;
+  previewDiv.style.display='block';
+  document.getElementById('btnDoMasterImport').style.display='';
+}
+
+function _doMasterImport() {
+  const wb=window._mipWb;
+  if (!wb) return toast('No file loaded.','error');
+  let addedEmp=0,addedWst=0,addedOp=0,addedFg=0,skipped=0;
+
+  // ── Workstations first (Operations reference them)
+  const wsWst=wb.Sheets['Workstations'];
+  if (wsWst) {
+    const rows=XLSX.utils.sheet_to_json(wsWst,{defval:''});
+    const wsts=DB.workstations();
+    rows.forEach(r=>{
+      const name=_normStr(r['Workstation Name *']||r['Workstation Name']||'');
+      if (!name) { skipped++; return; }
+      if (wsts.find(w=>_normStr(w.name)===_normStr(name))) { skipped++; return; }
+      const code=_normStr(r['Workstation Code (leave blank = auto)']||r['Workstation Code']||'')||('WST-'+String(wsts.length+addedWst+1).padStart(2,'0'));
+      const status=(r['Status (active/inactive)']||r['Status']||'active').toLowerCase()==='inactive'?'inactive':'active';
+      wsts.push({id:_crmUID('WST'),name,code,status,operations:[],createdAt:now(),createdBy:session.userId});
+      addedWst++;
+    });
+    DB.save(K.workstations,wsts);
+  }
+
+  // ── Operations
+  const wsOp=wb.Sheets['Operations'];
+  if (wsOp) {
+    const rows=XLSX.utils.sheet_to_json(wsOp,{defval:''});
+    const wsts=DB.workstations();
+    const ops=DB.operations();
+    rows.forEach(r=>{
+      const opName=_normStr(r['Operation Name *']||r['Operation Name']||'');
+      const wstName=_normStr(r['Workstation Name * (must match Workstations sheet or existing)']||r['Workstation Name']||'');
+      if (!opName||!wstName) { skipped++; return; }
+      const wst=wsts.find(w=>_normStr(w.name)===_normStr(wstName));
+      if (!wst) { skipped++; return; }
+      if (ops.find(o=>_normStr(o.name)===_normStr(opName)&&o.wstId===wst.id)) { skipped++; return; }
+      const status=(r['Status (active/inactive)']||r['Status']||'active').toLowerCase()==='inactive'?'inactive':'active';
+      const newOp={id:_crmUID('OP'),name:opName,wstId:wst.id,wstName:wst.name,status,createdAt:now(),createdBy:session.userId};
+      ops.push(newOp);
+      if (!wst.operations) wst.operations=[];
+      wst.operations.push({id:newOp.id,name:opName,status});
+      addedOp++;
+    });
+    DB.save(K.operations,ops);
+    DB.save(K.workstations,wsts);
+  }
+
+  // ── Employees
+  const wsEmp=wb.Sheets['Employees'];
+  if (wsEmp) {
+    const rows=XLSX.utils.sheet_to_json(wsEmp,{defval:''});
+    const emps=DB.employees();
+    rows.forEach(r=>{
+      const name=_normStr(r['Name *']||r['Name']||'');
+      if (!name) { skipped++; return; }
+      if (emps.find(e=>_normStr(e.name)===_normStr(name)&&!e.isDeleted)) { skipped++; return; }
+      const phone=String(r['Phone']||'').trim();
+      const designation=String(r['Designation']||'').trim();
+      const doj=_mipToDateStr(r['Date of Joining (YYYY-MM-DD)']||r['Date of Joining']||'');
+      const rawStype=String(r['Salary Type (monthly/daily/piece)']||r['Salary Type']||'monthly').toLowerCase();
+      const salaryType=['monthly','daily','piece'].includes(rawStype)?rawStype:'monthly';
+      const salary=parseFloat(String(r['Salary Amount']||'0').replace(/,/g,''))||0;
+      const status=(r['Status (active/inactive)']||r['Status']||'active').toLowerCase()==='inactive'?'inactive':'active';
+      const customId=String(r['EmpID (leave blank = auto)']||r['EmpID']||'').trim();
+      const empId=customId||_allocateEmpId();
+      emps.push({
+        id:uid(),empId,displayId:empId,
+        name,phone,designation,
+        dateOfJoining:doj,
+        salaryType,salary,
+        status,isDeleted:false,
+        createdAt:now(),createdBy:session.userId,
+      });
+      addedEmp++;
+    });
+    DB.save(K.employees,emps);
+  }
+
+  // ── FG Items
+  const wsFg=wb.Sheets['FG Items'];
+  if (wsFg) {
+    const rows=XLSX.utils.sheet_to_json(wsFg,{defval:''});
+    const fgItems=DB.fgItems();
+    rows.forEach(r=>{
+      const name=_normStr(r['Item Name *']||r['Item Name']||'');
+      if (!name) { skipped++; return; }
+      if (fgItems.find(f=>_normStr(f.name)===_normStr(name)&&!f.isDeleted)) { skipped++; return; }
+      const code=_normStr(r['Item Code (leave blank = auto)']||r['Item Code']||'')||('FG-'+String(fgItems.length+addedFg+1).padStart(3,'0'));
+      const rawUnit=String(r['Unit (PCS/SET/DZ)']||r['Unit']||'PCS').toUpperCase();
+      const unit=['PCS','SET','DZ','PAIR'].includes(rawUnit)?rawUnit:'PCS';
+      const description=String(r['Description']||'').trim();
+      const status=(r['Status (active/inactive)']||r['Status']||'active').toLowerCase()==='inactive'?'inactive':'active';
+      fgItems.push({
+        id:_crmUID('FG'),code,name,unit,description,status,isDeleted:false,
+        createdAt:now(),createdBy:session.userId,
+      });
+      addedFg++;
+    });
+    DB.save(K.fgItems,fgItems);
+  }
+
+  document.getElementById('modalMasterImport').style.display='none';
+  window._mipWb=null;
+  renderEmpMaster&&renderEmpMaster();
+  renderWstMaster&&renderWstMaster();
+  renderOpsMaster&&renderOpsMaster();
+  const total=addedEmp+addedWst+addedOp+addedFg;
+  toast(`✅ Imported: ${addedEmp} employees, ${addedWst} workstations, ${addedOp} operations, ${addedFg} FG items. Skipped: ${skipped}.`,'success');
+}
+
+// ── end Excel master data import/export ────────────────────────────────────────
+
 </script>
 </body>
 </html>
